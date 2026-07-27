@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Insurance Dialer — UI Prototype (synthetic data, places no calls)</title>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b24; --panel-2:#1d2430; --line:#2a3444;
+    --ink:#e6ebf3; --ink-dim:#93a1b5; --ink-faint:#63718a;
+    --accent:#5b8cff; --accent-ink:#0b1220;
+    --ok:#35c98a; --warn:#f0b429; --bad:#f2555a; --live:#35c98a;
+    --r:10px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
+  button:disabled{opacity:.35;cursor:not-allowed}
+
+  /* ---- prototype banner: this must never be mistaken for working software ---- */
+  .banner{background:repeating-linear-gradient(45deg,#3a2a00,#3a2a00 12px,#443100 12px,#443100 24px);
+    color:#ffd479;padding:7px 16px;font-size:12.5px;font-weight:600;letter-spacing:.02em;
+    display:flex;gap:10px;align-items:center;border-bottom:1px solid #5a4300}
+  .banner b{color:#fff}
+
+  header{display:flex;align-items:center;gap:18px;padding:12px 16px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .brand{font-weight:700;letter-spacing:-.01em}
+  .brand span{color:var(--ink-faint);font-weight:400}
+  .stats{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap}
+  .stat{text-align:right}
+  .stat b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+  .stat i{font-style:normal;font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em}
+
+  .kill{display:flex;align-items:center;gap:8px;padding:6px 11px;border-radius:var(--r);
+    background:var(--panel-2);border:1px solid var(--line);font-size:12.5px}
+  .kill.on{border-color:var(--bad);color:#ffb9bb;background:#2a1416}
+
+  main{display:grid;grid-template-columns:290px minmax(0,1fr) 330px;gap:12px;padding:12px;
+    align-items:start}
+  @media (max-width:1100px){main{grid-template-columns:1fr}}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .panel > h2{margin:0;padding:11px 14px;font-size:12px;text-transform:uppercase;
+    letter-spacing:.07em;color:var(--ink-dim);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px}
+  .panel > h2 .count{margin-left:auto;font-size:11px;color:var(--ink-faint)}
+  .pad{padding:14px}
+
+  /* ---- queue ---- */
+  .queue{max-height:calc(100vh - 260px);overflow:auto}
+  .lead{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);
+    align-items:flex-start;font-size:13px}
+  .lead:last-child{border-bottom:none}
+  .lead.current{background:#16233c;box-shadow:inset 3px 0 0 var(--accent)}
+  .lead.done{opacity:.45}
+  .lead .nm{font-weight:600}
+  .lead .meta{color:var(--ink-faint);font-size:11.5px;font-family:var(--mono)}
+  .lead .grow{flex:1;min-width:0}
+  .pill{font-size:10.5px;padding:2px 7px;border-radius:99px;white-space:nowrap;
+    border:1px solid var(--line);color:var(--ink-dim);align-self:center}
+  .pill.ok{color:var(--ok);border-color:#1e5c44;background:#11241d}
+  .pill.bad{color:var(--bad);border-color:#5c2326;background:#241315}
+  .pill.warn{color:var(--warn);border-color:#5c4718;background:#241f10}
+
+  /* ---- call stage ---- */
+  .stage{min-height:420px;display:flex;flex-direction:column}
+  .idle{margin:auto;text-align:center;color:var(--ink-faint);padding:50px 20px}
+  .idle h3{color:var(--ink-dim);font-weight:600;margin:0 0 6px}
+
+  .contact{padding:18px;border-bottom:1px solid var(--line)}
+  .contact .top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .contact h3{margin:0;font-size:22px;letter-spacing:-.02em}
+  .tel{font-family:var(--mono);font-size:16px;color:var(--accent)}
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:10px 18px;margin-top:14px}
+  .fact i{display:block;font-style:normal;font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--ink-faint)}
+  .fact b{font-weight:600;font-size:13px}
+
+  .callbar{padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .status{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint)}
+  .dot.live{background:var(--live);animation:pulse 1.4s infinite}
+  .dot.ring{background:var(--warn);animation:pulse .8s infinite}
+  .dot.err{background:var(--bad)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .timer{font-family:var(--mono);font-size:26px;font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em;margin-left:auto}
+
+  .btn{padding:9px 15px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel-2);font-weight:600;font-size:13px;transition:.12s}
+  .btn:not(:disabled):hover{border-color:#3d4b60;background:#242c3a}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .btn.primary:not(:disabled):hover{background:#7ba2ff}
+  .btn.danger{background:#3a1a1c;border-color:#6b2b2f;color:#ffb9bb}
+  .btn.danger:not(:disabled):hover{background:#4a2124}
+  .btn.on{background:#3a3410;border-color:#6b5f1c;color:#ffe49b}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+
+  .keypad{display:none;grid-template-columns:repeat(3,1fr);gap:7px;max-width:230px;
+    padding:0 18px 16px}
+  .keypad.show{display:grid}
+  .keypad button{padding:11px;border-radius:8px;background:var(--panel-2);
+    border:1px solid var(--line);font-family:var(--mono);font-size:15px}
+  .keypad button:hover{background:#242c3a}
+  .dtmf{font-family:var(--mono);color:var(--ink-dim);padding:0 18px 14px;min-height:20px;font-size:13px}
+
+  .blocked{margin:18px;padding:14px;border-radius:var(--r);
+    background:#241315;border:1px solid #5c2326}
+  .blocked h4{margin:0 0 6px;color:#ffb9bb;font-size:13.5px}
+  .blocked p{margin:0;color:#e8a9ac;font-size:12.5px}
+  .blocked code{font-family:var(--mono);font-size:11.5px;color:#ffd0d2}
+
+  /* ---- disposition ---- */
+  .dispo{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .dispo button{padding:10px 8px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel-2);font-size:12.5px;font-weight:600;text-align:left}
+  .dispo button:hover{border-color:var(--accent)}
+  .dispo button.sel{background:#16233c;border-color:var(--accent)}
+  .dispo button.neg:hover{border-color:var(--bad)}
+  label.fld{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--ink-faint);margin:14px 0 5px}
+  textarea,input[type=datetime-local],select{width:100%;padding:9px;border-radius:8px;
+    background:var(--bg);border:1px solid var(--line);color:var(--ink);font:inherit}
+  textarea{min-height:74px;resize:vertical}
+
+  .log{max-height:180px;overflow:auto;font-family:var(--mono);font-size:11.5px;
+    color:var(--ink-dim);padding:10px 14px}
+  .log div{padding:2px 0;border-bottom:1px solid #1e2531}
+  .log .t{color:var(--ink-faint)}
+  footer{padding:14px 16px;color:var(--ink-faint);font-size:12px;text-align:center}
+  kbd{font-family:var(--mono);font-size:11px;background:var(--panel-2);
+    border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px}
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <b>PROTOTYPE — NOT CONNECTED TO ANYTHING.</b>
+  Synthetic leads. No telephony provider, no GoHighLevel, no network calls. Every phone number is a
+  reserved 555 test number. This places no calls and writes nothing anywhere.
+</div>
+
+<header>
+  <div class="brand">Insurance Dialer <span>/ power dialer session</span></div>
+  <button class="kill" id="killBtn" title="Global stop — halts the session immediately">
+    <span class="dot" id="killDot"></span><span id="killTxt">Kill switch: armed</span>
+  </button>
+  <div class="stats">
+    <div class="stat"><b id="sDialed">0</b><i>dialed</i></div>
+    <div class="stat"><b id="sContact">0</b><i>contacts</i></div>
+    <div class="stat"><b id="sAppt">0</b><i>appts</i></div>
+    <div class="stat"><b id="sBlocked">0</b><i>blocked</i></div>
+    <div class="stat"><b id="sTalk">0:00</b><i>talk time</i></div>
+  </div>
+</header>
+
+<main>
+  <!-- ================= QUEUE ================= -->
+  <section class="panel">
+    <h2>Lead queue <span class="count" id="qCount"></span></h2>
+    <div class="pad" style="border-bottom:1px solid var(--line)">
+      <label class="fld" style="margin-top:0">Campaign</label>
+      <select id="campaign">
+        <option>Final Expense — FL — aged 30d</option>
+        <option>Medicare Supplement — FL — T65</option>
+        <option>Auto — cross-sell — existing book</option>
+      </select>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="startBtn">Start session</button>
+        <button class="btn" id="pauseBtn" disabled>Pause</button>
+        <button class="btn" id="stopBtn" disabled>Stop</button>
+      </div>
+      <p style="margin:12px 0 0;font-size:12px;color:var(--ink-faint)" id="eligLine"></p>
+    </div>
+    <div class="queue" id="queue"></div>
+  </section>
+
+  <!-- ================= CALL STAGE ================= -->
+  <section class="panel stage">
+    <h2>Active call <span class="count" id="stageState">idle</span></h2>
+    <div id="stageBody">
+      <div class="idle">
+        <h3>No session running</h3>
+        <div>Pick a campaign and press <b>Start session</b>.</div>
+        <div style="margin-top:14px;font-size:12px">
+          <kbd>Space</kbd> dial / hang up &nbsp; <kbd>M</kbd> mute &nbsp;
+          <kbd>S</kbd> skip &nbsp; <kbd>1</kbd>–<kbd>6</kbd> disposition
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DISPOSITION ================= -->
+  <section class="panel">
+    <h2>Outcome <span class="count" id="dispoHint">after the call</span></h2>
+    <div class="pad">
+      <!-- Every outcome carries its hotkey in the label. All EIGHT are reachable from the keyboard:
+           `wrong-number` and `dnc` used to be mouse-only, and `dnc` is the most
+           compliance-significant outcome on the panel. (P-3.1) -->
+      <div class="dispo" id="dispo">
+        <button data-d="appointment"><kbd>1</kbd> 📅 Appointment set</button>
+        <button data-d="interested"><kbd>2</kbd> 👍 Interested — follow up</button>
+        <button data-d="callback"><kbd>3</kbd> ⏰ Callback requested</button>
+        <button data-d="no-answer"><kbd>4</kbd> 📵 No answer</button>
+        <button data-d="voicemail"><kbd>5</kbd> 🎙 Left voicemail</button>
+        <button data-d="wrong-number" class="neg"><kbd>6</kbd> ❌ Wrong number</button>
+        <button data-d="not-interested" class="neg"><kbd>7</kbd> 🚫 Not interested</button>
+        <button data-d="dnc" class="neg"><kbd>8</kbd> ⛔ Add to DNC</button>
+      </div>
+
+      <!-- Non-contact actions. Shown ONLY on a blocked lead, and they REPLACE the eight outcomes
+           above rather than sitting alongside them: a lead the compliance floor refused must not be
+           recordable as "Appointment set" or "No answer", both of which assert a call was placed.
+           (P-7) -->
+      <div class="dispo" id="blockedActions" style="display:none"></div>
+
+      <!-- A temporarily-blocked lead needs a way forward that is not "retire it". CALLING_WINDOW is
+           temporary; the only affordance used to be a disposition, which permanently removed the
+           consumer from the eligible count. (P-6) -->
+      <div id="deferWrap" style="display:none;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:8px">
+        <div style="font-size:12px;color:var(--ink-faint)" id="deferHint"></div>
+      </div>
+
+      <!-- Clearing a compliance block is a deliberate act, not a keystroke. (P-8) -->
+      <div id="ackWrap" style="display:none;margin-top:10px;padding:10px;border:1px solid var(--bad);border-radius:8px">
+        <label class="fld" for="ackReason">Compliance acknowledgement — required to retire a blocked lead</label>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">
+          <input type="checkbox" id="ackBox" style="margin-top:3px">
+          <label for="ackBox" style="font-size:12px;line-height:1.45" id="ackText"></label>
+        </div>
+        <input type="text" id="ackReason" placeholder="Reason for retiring this blocked lead…" style="width:100%">
+      </div>
+
+      <div id="cbWrap" style="display:none">
+        <label class="fld" for="cbTime">Callback date &amp; time <span style="color:var(--bad)">(required)</span></label>
+        <input type="datetime-local" id="cbTime">
+      </div>
+
+      <!-- End-of-session surface. Committing the last lead used to drop straight to the idle card,
+           so the session simply vanished with no completion summary. (P-4) -->
+      <div id="summaryWrap" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--ok);border-radius:8px">
+        <h4 style="margin:0 0 8px;font-size:13px">Session summary</h4>
+        <div id="summaryBody" style="font-size:12px;line-height:1.6"></div>
+      </div>
+
+      <label class="fld" for="notes">Call notes <span style="text-transform:none;letter-spacing:0">(would sync to the CRM contact)</span></label>
+      <textarea id="notes" placeholder="What was said…"></textarea>
+
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="saveBtn" disabled>Save &amp; next lead</button>
+      </div>
+      <p style="margin:10px 0 0;font-size:11.5px;color:var(--ink-faint)" id="nextPrev"></p>
+    </div>
+    <h2 style="border-top:1px solid var(--line)">Session log</h2>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+
+<footer>
+  Prototype for shaping the product, not the product. Compliance decisions shown here are
+  <b>simulated in the browser</b>; the real ones must be made server-side and fail closed.
+</footer>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ *
+ * Synthetic leads. 555-01xx is the reserved fictional range, so none
+ * of these can ever ring a real handset even by accident.
+ * `block` is a PRE-DECIDED compliance verdict, hard-coded per lead so
+ * the blocked-call experience is visible without any engine existing.
+ * ------------------------------------------------------------------ */
+const LEADS = [
+  {id:'L-1041', name:'Dorothy Whitfield', phone:'+1 555-0142', age:71, state:'FL', tz:'ET',
+   city:'Port Charlotte', product:'Final Expense', source:'Facebook lead form',
+   lastTouch:'32 days ago', attempts:1, consent:'Written, 2026-06-19'},
+  {id:'L-1042', name:'Marcus Bell', phone:'+1 555-0177', age:66, state:'FL', tz:'ET',
+   city:'Tampa', product:'Final Expense', source:'Aged list — vendor B',
+   lastTouch:'9 days ago', attempts:3, consent:'Written, 2026-05-02'},
+  {id:'L-1043', name:'Yolanda Prieto', phone:'+1 555-0119', age:68, state:'CA', tz:'PT',
+   city:'Fresno', product:'Final Expense', source:'Referral',
+   lastTouch:'2 days ago', attempts:0, consent:'Written, 2026-07-11',
+   block:{code:'CALLING_WINDOW', msg:'Local time in the consumer’s time zone is 7:12 AM. Outside the 8:00 AM – 9:00 PM window.'}},
+  {id:'L-1044', name:'Ronald Espisito', phone:'+1 555-0164', age:74, state:'FL', tz:'ET',
+   city:'Naples', product:'Final Expense', source:'Facebook lead form',
+   lastTouch:'14 days ago', attempts:2, consent:'Written, 2026-06-30'},
+  {id:'L-1045', name:'Brenda Cho', phone:'+1 555-0158', age:63, state:'FL', tz:'ET',
+   city:'Orlando', product:'Final Expense', source:'Aged list — vendor A',
+   lastTouch:'61 days ago', attempts:0, consent:'None on file',
+   block:{code:'INTERNAL_DNC', msg:'On the agency internal do-not-call list since 2026-04-08. Reason recorded: consumer request by phone.'}},
+  {id:'L-1046', name:'Alvin Trask', phone:'+1 555-0193', age:69, state:'FL', tz:'ET',
+   city:'Ocala', product:'Final Expense', source:'Referral',
+   lastTouch:'5 days ago', attempts:6, consent:'Written, 2026-07-01',
+   block:{code:'ATTEMPT_LIMIT', msg:'6 attempts in the trailing 7 days. Campaign cap is 5.'}},
+  {id:'L-1047', name:'Sylvia Barnhart', phone:'+1 555-0126', age:72, state:'FL', tz:'ET',
+   city:'Sarasota', product:'Final Expense', source:'Facebook lead form',
+   lastTouch:'21 days ago', attempts:1, consent:'Written, 2026-07-05'},
+  {id:'L-1048', name:'Curtis Vandenberg', phone:'+1 555-0188', age:65, state:'FL', tz:'ET',
+   city:'Lakeland', product:'Final Expense', source:'Aged list — vendor B',
+   lastTouch:'44 days ago', attempts:2, consent:'Written, 2026-05-28'},
+];
+
+const DISPO_LABEL = {
+  'appointment':'Appointment set','interested':'Interested — follow up',
+  'callback':'Callback requested','no-answer':'No answer','voicemail':'Left voicemail',
+  'wrong-number':'Wrong number','not-interested':'Not interested','dnc':'Added to DNC',
+  // Non-contact outcomes. These exist so a lead that was never dialled is never recorded with an
+  // outcome that asserts a call happened. "No answer" is a claim about a call; "Not attempted" is a
+  // claim about the queue. (P-7, P-11)
+  'not-attempted':'Not attempted — skipped',
+  'compliance-retired':'Retired — compliance block acknowledged',
+  'dnc-confirmed':'DNC confirmed — no call placed'
+};
+
+// Outcomes that ASSERT A CALL WAS PLACED. None of these may ever be recorded against a lead the
+// compliance floor refused, or against a lead that was skipped before dialling.
+const IMPLIES_CALL = new Set(['appointment','interested','callback','no-answer','voicemail','wrong-number','not-interested']);
+
+/* Per-block-code affordances. The old screen offered the same eight outcomes for all three codes,
+ * so the same control meant different things on the same screen with nothing distinguishing them.
+ * CALLING_WINDOW is TEMPORARY and its primary action is to requeue, not to retire. (P-6) */
+const BLOCKED_ACTIONS = {
+  CALLING_WINDOW: {
+    temporary: true,
+    defer: 'Requeue for 8:00 AM in the consumer’s time zone',
+    actions: [{d:'defer', label:'⏳ Requeue for later', primary:true},
+              {d:'compliance-retired', label:'⛔ Retire from this campaign', neg:true}],
+    ack: 'I confirm this lead is outside the permitted calling window and I am removing it from this campaign anyway.'
+  },
+  INTERNAL_DNC: {
+    temporary: false,
+    actions: [{d:'dnc-confirmed', label:'⛔ Confirm DNC — no call placed', primary:true},
+              {d:'compliance-retired', label:'📁 Retire from this campaign', neg:true}],
+    ack: 'I confirm this consumer is on the internal do-not-call list and no call was placed.'
+  },
+  ATTEMPT_LIMIT: {
+    temporary: true,
+    defer: 'Requeue for the next campaign window, when the trailing-7-day count has decayed',
+    actions: [{d:'defer', label:'⏳ Requeue for later', primary:true},
+              {d:'compliance-retired', label:'📁 Retire from this campaign', neg:true}],
+    ack: 'I confirm this lead is over the campaign attempt cap and I am removing it from this campaign.'
+  }
+};
+
+/* ---------------- state ---------------- */
+let S = {
+  running:false, paused:false, killed:false,
+  idx:-1,                       // index into LEADS
+  phase:'idle',                 // idle|ready|dialing|connected|wrapup|blocked
+  muted:false, keypad:false, dtmf:'',
+  t0:0, tick:null, elapsed:0, talkTotal:0,
+  dispo:null,
+  attempted:false,              // was a call actually PLACED on the current lead
+  interrupted:null,             // 'stop' | 'kill-switch' -- an in-flight call that was cut
+  stats:{dialed:0, contact:0, appt:0},
+  // S.done maps id -> a RECORD, not a bare disposition string. The note, the callback time, the
+  // compliance reason and the interruption state all used to be dropped on the floor -- `finish()`
+  // read the note only to log "note saved (N chars)", which asserted the opposite of what happened.
+  // (P-2)
+  done:{},
+  deferred:{},                  // id -> {reason, at} -- requeued, NOT retired (P-6)
+  sessionStartedAt:null
+};
+
+// Blocked leads are counted from the RECORD SET, never incremented on load. `loadLead` used to do
+// `S.stats.blocked++` unconditionally, so stopping and restarting re-counted the same lead and the
+// sidebar figure climbed past the constant 3 shown in the queue header. Two numbers on one screen,
+// both labelled "blocked", disagreeing. (P-9)
+const blockedSeen = () => new Set(LEADS.filter(L => L.block && (S.done[L.id] || S.deferred[L.id] || (S.running && LEADS[S.idx] && LEADS[S.idx].id === L.id))).map(L => L.id));
+
+const $ = s => document.querySelector(s);
+const pad2 = n => String(n).padStart(2,'0');
+const mmss = s => `${Math.floor(s/60)}:${pad2(s%60)}`;
+
+function log(msg, kind){
+  const d = document.createElement('div');
+  const now = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  d.innerHTML = `<span class="t">${now}</span> ${msg}`;
+  if(kind==='bad') d.style.color = 'var(--bad)';
+  if(kind==='ok')  d.style.color = 'var(--ok)';
+  $('#log').prepend(d);
+}
+
+/* ---------------- render ---------------- */
+function renderQueue(){
+  const q = $('#queue');
+  q.innerHTML = '';
+  LEADS.forEach((L,i)=>{
+    const el = document.createElement('div');
+    const rec = S.done[L.id];
+    el.className = 'lead' + (i===S.idx ? ' current' : '') + (rec ? ' done' : '');
+    const verdict = rec
+      ? `<span class="pill">${DISPO_LABEL[rec.dispo] || rec.dispo}</span>`
+      : S.deferred[L.id] ? `<span class="pill">⏳ requeued</span>`
+      : L.block ? `<span class="pill bad">blocked</span>`
+                : `<span class="pill ok">eligible</span>`;
+    el.innerHTML = `<div class="grow">
+        <div class="nm">${L.name}</div>
+        <div class="meta">${L.phone} · ${L.city}, ${L.state} · ${L.attempts} prior</div>
+      </div>${verdict}`;
+    q.appendChild(el);
+  });
+  const elig = LEADS.filter(L=>!L.block && !S.done[L.id]).length;
+  const blk  = LEADS.filter(L=>L.block).length;
+  const dfr  = Object.keys(S.deferred).length;
+  $('#qCount').textContent = `${LEADS.length} leads`;
+  $('#eligLine').innerHTML =
+    `<b style="color:var(--ok)">${elig} eligible</b> · ` +
+    `<b style="color:var(--bad)">${blk} blocked by compliance</b> · ` +
+    (dfr ? `<b>${dfr} requeued</b> · ` : '') +
+    `${Object.keys(S.done).length} completed`;
+}
+
+function renderStats(){
+  $('#sDialed').textContent  = S.stats.dialed;
+  $('#sContact').textContent = S.stats.contact;
+  $('#sAppt').textContent    = S.stats.appt;
+  // Derived from the record set, so it is stable across Stop/Start and can never exceed the
+  // constant shown in the queue header. (P-9)
+  $('#sBlocked').textContent = blockedSeen().size;
+  $('#sTalk').textContent    = mmss(S.talkTotal);
+}
+
+function statusBits(){
+  switch(S.phase){
+    case 'dialing':   return ['ring','Dialing…'];
+    case 'connected': return ['live', S.muted ? 'Connected — MUTED' : 'Connected'];
+    case 'wrapup':    return ['','Wrap-up'];
+    case 'blocked':   return ['err','Blocked — not dialed'];
+    case 'ready':     return ['','Ready to dial'];
+    case 'paused-hold': return ['','Paused'];
+    default:          return ['','Idle'];
+  }
+}
+
+function renderStage(){
+  const body = $('#stageBody');
+  $('#stageState').textContent = S.phase;
+
+  // FOCUS SURVIVES THE RE-RENDER. `body.innerHTML = ...` discards and recreates every call-control
+  // button, so focus fell back to <body> and Tab restarted from the top of the document -- on every
+  // mute, every keypad toggle and every DTMF digit. A keyboard-only insurance agent lost their place
+  // constantly. The active element is identified by id, and restored after the rebuild. (P-3.3)
+  const prevFocusId = document.activeElement && document.activeElement.id;
+  const prevKey = document.activeElement && document.activeElement.dataset
+                  ? document.activeElement.dataset.k : null;
+
+  // A PAUSED SESSION SAYS IT IS PAUSED. It is still running, Stop is still live, and the header
+  // button says "Resume" -- so the stage must not claim there is no session. (P-5)
+  if(S.running && S.paused && S.idx < 0){
+    const remaining = LEADS.filter(L=>!S.done[L.id] && !S.deferred[L.id]).length;
+    body.innerHTML = `<div class="idle"><h3>Session paused</h3>
+      <div>${remaining} lead${remaining===1?'':'s'} still queued. Press <b>Resume</b> to load the next one,
+      or <b>Stop</b> to end the session.</div>
+      <div style="margin-top:14px;font-size:12px">
+        <kbd>Space</kbd> dial / hang up &nbsp; <kbd>M</kbd> mute &nbsp;
+        <kbd>S</kbd> skip &nbsp; <kbd>1</kbd>–<kbd>8</kbd> outcome &nbsp; <kbd>Enter</kbd> save</div></div>`;
+    return;
+  }
+
+  if(!S.running || S.idx < 0){
+    body.innerHTML = `<div class="idle"><h3>${S.killed ? 'Session halted by kill switch' : 'No session running'}</h3>
+      <div>${S.killed ? 'Re-arm the kill switch to continue.' : 'Pick a campaign and press <b>Start session</b>.'}</div>
+      <div style="margin-top:14px;font-size:12px">
+        <kbd>Space</kbd> dial / hang up &nbsp; <kbd>M</kbd> mute &nbsp;
+        <kbd>S</kbd> skip &nbsp; <kbd>1</kbd>–<kbd>8</kbd> outcome &nbsp; <kbd>Enter</kbd> save</div></div>`;
+    return;
+  }
+
+  const L = LEADS[S.idx];
+  const [dotCls, label] = statusBits();
+
+  body.innerHTML = `
+    <div class="contact">
+      <div class="top">
+        <h3>${L.name}</h3>
+        <span class="tel">${L.phone}</span>
+        <span class="pill ${L.block?'bad':'ok'}">${L.block ? L.block.code : 'eligible'}</span>
+      </div>
+      <div class="facts">
+        <div class="fact"><i>Age</i><b>${L.age}</b></div>
+        <div class="fact"><i>Location</i><b>${L.city}, ${L.state} (${L.tz})</b></div>
+        <div class="fact"><i>Product</i><b>${L.product}</b></div>
+        <div class="fact"><i>Lead source</i><b>${L.source}</b></div>
+        <div class="fact"><i>Prior attempts</i><b>${L.attempts}</b></div>
+        <div class="fact"><i>Last touch</i><b>${L.lastTouch}</b></div>
+        <div class="fact"><i>Consent on file</i><b>${L.consent}</b></div>
+        <div class="fact"><i>Record ID</i><b style="font-family:var(--mono)">${L.id}</b></div>
+      </div>
+    </div>
+
+    ${L.block ? `
+      <div class="blocked">
+        <h4>⛔ This call was not placed</h4>
+        <p>${L.block.msg}</p>
+        <p style="margin-top:8px"><b>What happens next:</b> ${
+          (BLOCKED_ACTIONS[L.block.code] && BLOCKED_ACTIONS[L.block.code].temporary)
+            ? 'This block is <b>temporary</b>. Requeue the lead — do not retire it.'
+            : 'This block is <b>not</b> time-limited. Confirm it below; do not place a call.'
+        }</p>
+        <p style="margin-top:8px"><code>decision=DENY  rule=${L.block.code}  logged=immutable</code></p>
+      </div>` : ''}
+
+    <div class="callbar">
+      <div class="status"><span class="dot ${dotCls}"></span>${label}</div>
+      <div class="timer">${mmss(S.elapsed)}</div>
+    </div>
+
+    <div class="callbar" style="padding-top:0">
+      <div class="row">
+        <button class="btn primary" id="dialBtn">Dial</button>
+        <button class="btn danger"  id="hangBtn">Hang up</button>
+        <button class="btn ${S.muted?'on':''}" id="muteBtn">${S.muted?'Unmute':'Mute'}</button>
+        <button class="btn ${S.keypad?'on':''}" id="padBtn">Keypad</button>
+        <button class="btn" id="holdBtn">Hold</button>
+        <button class="btn" id="skipBtn">Skip lead</button>
+      </div>
+    </div>
+
+    <div class="keypad ${S.keypad?'show':''}" id="keypad">
+      ${['1','2','3','4','5','6','7','8','9','*','0','#'].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
+    </div>
+    <div class="dtmf">${S.dtmf ? 'Sent: '+S.dtmf : ''}</div>`;
+
+  // wire the freshly-rendered controls
+  const dial = $('#dialBtn'), hang = $('#hangBtn');
+  dial.disabled = !!L.block || S.phase !== 'ready';
+  hang.disabled = !(S.phase==='dialing' || S.phase==='connected');
+  $('#muteBtn').disabled = S.phase!=='connected';
+  $('#padBtn').disabled  = S.phase!=='connected';
+  $('#holdBtn').disabled = S.phase!=='connected';
+  $('#skipBtn').disabled = S.phase==='dialing' || S.phase==='connected';
+
+  dial.onclick = startDial;
+  hang.onclick = hangUp;
+  $('#muteBtn').onclick = ()=>{ S.muted=!S.muted; log(S.muted?'Muted':'Unmuted'); renderStage(); };
+  $('#padBtn').onclick  = ()=>{ S.keypad=!S.keypad; renderStage(); };
+  $('#holdBtn').onclick = ()=> log('Hold — provider-dependent, stubbed in this prototype');
+  $('#skipBtn').onclick = ()=> skipLead();
+  document.querySelectorAll('#keypad button').forEach(b=>{
+    b.onclick = ()=>{ S.dtmf += b.dataset.k; renderStage(); };
+  });
+
+  // Restore focus after the rebuild. (P-3.3)
+  if(prevFocusId && $('#'+prevFocusId)) $('#'+prevFocusId).focus();
+  else if(prevKey){
+    const again = document.querySelector(`#keypad button[data-k="${prevKey}"]`);
+    if(again) again.focus();
+  }
+}
+
+function renderDispo(){
+  const wrap = S.phase==='wrapup';
+  const blocked = S.phase==='blocked';
+  const armed = wrap || blocked;
+  const L = S.idx >= 0 ? LEADS[S.idx] : null;
+  const cfg = (blocked && L && L.block) ? BLOCKED_ACTIONS[L.block.code] : null;
+
+  $('#dispoHint').textContent = blocked ? 'non-contact outcomes only' : (armed ? 'choose one' : 'after the call');
+
+  // ON A BLOCKED LEAD THE EIGHT CALL OUTCOMES ARE HIDDEN, not merely disabled. `renderDispo` used to
+  // arm all eight whenever the phase was wrapup OR blocked, so a lead the compliance floor refused
+  // could be recorded as "Appointment set" and S.stats.appt incremented -- an appointment attributed
+  // to a call that was never placed. (P-7)
+  $('#dispo').style.display = blocked ? 'none' : '';
+  $('#blockedActions').style.display = blocked ? '' : 'none';
+
+  document.querySelectorAll('#dispo button').forEach(b=>{
+    b.disabled = !wrap;
+    b.classList.toggle('sel', S.dispo === b.dataset.d);
+  });
+
+  if(blocked && cfg){
+    $('#blockedActions').innerHTML = cfg.actions.map(a =>
+      `<button data-d="${a.d}"${a.neg ? ' class="neg"' : ''}>${a.label}</button>`).join('');
+    document.querySelectorAll('#blockedActions button').forEach(b=>{
+      b.classList.toggle('sel', S.dispo === b.dataset.d);
+      b.onclick = ()=>{ S.dispo = b.dataset.d; renderDispo(); };
+    });
+    $('#deferWrap').style.display = S.dispo==='defer' ? 'block' : 'none';
+    if(S.dispo==='defer') $('#deferHint').textContent = cfg.defer || 'Requeued for a later pass.';
+    // Retiring a blocked lead demands an explicit acknowledgement AND a reason. Three `S` presses
+    // used to clear all three blocked leads with no confirmation and a log line indistinguishable
+    // from an ordinary skip. (P-8)
+    const needsAck = S.dispo==='compliance-retired';
+    $('#ackWrap').style.display = needsAck ? 'block' : 'none';
+    if(needsAck) $('#ackText').textContent = cfg.ack;
+  } else {
+    $('#deferWrap').style.display = 'none';
+    $('#ackWrap').style.display = 'none';
+  }
+
+  $('#cbWrap').style.display = (wrap && S.dispo==='callback') ? 'block' : 'none';
+
+  // A callback with no time reads as handled and is not. (P-10)
+  const cbMissing = (S.dispo==='callback' && !$('#cbTime').value);
+  const ackMissing = (S.dispo==='compliance-retired' &&
+                      (!$('#ackBox').checked || !$('#ackReason').value.trim()));
+
+  const nxt = nextIndex();
+  const last = (nxt === -1);
+  // "Save & next lead" on the final lead contradicted the panel directly above it, which already
+  // said no leads remained. (P-4)
+  $('#saveBtn').textContent = last ? 'Save & finish session' : 'Save & next lead';
+  $('#saveBtn').disabled = !armed || !S.dispo || cbMissing || ackMissing;
+  $('#saveBtn').title = cbMissing ? 'Choose a callback date and time first'
+                      : ackMissing ? 'Tick the acknowledgement and give a reason first' : '';
+
+  $('#nextPrev').textContent = !armed ? ''
+    : last ? 'No leads remaining after this one.'
+    : `Next up: ${LEADS[nxt].name} · ${LEADS[nxt].phone}`;
+}
+
+const render = ()=>{ renderQueue(); renderStats(); renderStage(); renderDispo(); };
+
+/* ---------------- session mechanics ---------------- */
+// A DEFERRED lead is skipped for the rest of this session but is NOT retired: it keeps no record in
+// S.done, so it stays in the eligible population for the next session. (P-6)
+function nextIndex(){
+  for(let i=S.idx+1;i<LEADS.length;i++) if(!S.done[LEADS[i].id] && !S.deferred[LEADS[i].id]) return i;
+  return -1;
+}
+
+function loadLead(i){
+  S.idx = i; S.dispo=null; S.muted=false; S.keypad=false; S.dtmf='';
+  S.elapsed=0; S.attempted=false; S.interrupted=null; stopTick();
+  $('#notes').value=''; $('#cbTime').value='';
+  $('#ackBox').checked = false; $('#ackReason').value = '';
+  $('#summaryWrap').style.display = 'none';
+  const L = LEADS[i];
+  if(L.block){
+    // No counter increment here. See blockedSeen(). (P-9)
+    S.phase='blocked';
+    log(`⛔ ${L.name} — <b>${L.block.code}</b>, call not placed`,'bad');
+  } else {
+    S.phase='ready';
+    log(`Loaded ${L.name} (${L.phone})`);
+  }
+  render();
+}
+
+function startDial(){
+  if(S.phase!=='ready') return;
+  S.phase='dialing'; S.stats.dialed++; S.attempted=true;
+  log(`Dialing ${LEADS[S.idx].phone}…`);
+  render();
+  // Simulated ring, then a simulated answer-or-not. Nothing leaves the browser.
+  setTimeout(()=>{
+    if(S.phase!=='dialing') return;
+    if(Math.random() < 0.62){
+      S.phase='connected'; S.stats.contact++;
+      startTick();
+      log('Answered — media connected','ok');
+    } else {
+      log('No answer after 30s');
+      S.phase='wrapup'; S.dispo='no-answer';
+    }
+    render();
+  }, 1600 + Math.random()*1400);
+}
+
+function hangUp(){
+  if(!(S.phase==='dialing'||S.phase==='connected')) return;
+  stopTick();
+  S.talkTotal += S.elapsed;
+  log(`Call ended after ${mmss(S.elapsed)}`);
+  S.phase='wrapup';
+  render();
+}
+
+function startTick(){
+  S.t0 = Date.now();
+  S.tick = setInterval(()=>{
+    S.elapsed = Math.floor((Date.now()-S.t0)/1000);
+    const t = document.querySelector('.timer'); if(t) t.textContent = mmss(S.elapsed);
+  }, 250);
+}
+function stopTick(){ if(S.tick){ clearInterval(S.tick); S.tick=null; } }
+
+/* SKIP. Separated from finish() because "skip" is not an outcome -- it is the ABSENCE of one, and
+ * conflating the two is what let `S` assert a call had happened.
+ *
+ *   * On a blocked lead it does nothing at all. Retiring a compliance block requires the explicit
+ *     acknowledgement in the outcome panel. Three keystrokes must not clear three blocked leads. (P-8)
+ *   * With a disposition already chosen it COMMITS that disposition instead of overwriting it with
+ *     "No answer". `S` sat in the same muscle-memory group as 1-8 on a screen used hundreds of times
+ *     a day, and it silently converted the most valuable outcome the business has into the least
+ *     valuable one. (P-1)
+ *   * With no call placed it records "Not attempted", never "No answer". (P-11) */
+function skipLead(){
+  if(S.phase==='blocked'){
+    log('Blocked lead — choose a compliance outcome; skip is disabled here','bad');
+    return;
+  }
+  if(!(S.phase==='ready' || S.phase==='wrapup')) return;
+  if(S.dispo){ finish(S.dispo, false); return; }
+  finish(S.attempted ? 'no-answer' : 'not-attempted', true);
+}
+
+function finish(dispo, skipped){
+  const L = LEADS[S.idx];
+
+  // LAST-LINE GUARD. Even if a future edit re-arms a call outcome on a blocked lead, the record is
+  // refused here. The panel is the affordance; this is the invariant. (P-7)
+  if(L.block && IMPLIES_CALL.has(dispo)){
+    log(`Refused: "${DISPO_LABEL[dispo]}" asserts a call was placed, and ${L.block.code} blocked this lead`,'bad');
+    return;
+  }
+  if(!L.block && !S.attempted && IMPLIES_CALL.has(dispo) && dispo!=='no-answer'){
+    // Choosing an outcome without dialling is allowed for research-y outcomes but must not claim
+    // contact. Only no-answer is filtered separately below.
+  }
+  if(!S.attempted && dispo==='no-answer'){
+    log('Refused: "No answer" asserts a call was placed. Recorded as Not attempted instead.','bad');
+    dispo = 'not-attempted';
+  }
+
+  const note = $('#notes').value.trim();
+  const cbVal = $('#cbTime').value;
+
+  if(dispo==='callback' && !cbVal){
+    log('Refused: a callback needs a date and time','bad');
+    return;
+  }
+  if(dispo==='compliance-retired' && (!$('#ackBox').checked || !$('#ackReason').value.trim())){
+    log('Refused: retiring a blocked lead needs the acknowledgement and a reason','bad');
+    return;
+  }
+
+  // DEFER is a requeue, not a disposition: no record in S.done, so the lead stays eligible. (P-6)
+  if(dispo==='defer'){
+    S.deferred[L.id] = { reason: (L.block ? L.block.code : 'agent-deferred'), at: new Date().toISOString() };
+    log(`⏳ ${L.name} requeued — <b>${L.block ? L.block.code : 'deferred'}</b>, not retired`);
+    advance();
+    return;
+  }
+
+  // THE STRUCTURED RECORD. Everything the session needs to be reconstructed later. (P-2)
+  const rec = {
+    dispo,
+    label: DISPO_LABEL[dispo] || dispo,
+    note: note || null,
+    callbackAt: (dispo==='callback' && cbVal) ? new Date(cbVal).toISOString() : null,
+    attempted: S.attempted,
+    talkSeconds: S.elapsed,
+    interrupted: S.interrupted,
+    blockCode: L.block ? L.block.code : null,
+    complianceAck: dispo==='compliance-retired' || dispo==='dnc-confirmed',
+    complianceReason: (dispo==='compliance-retired') ? $('#ackReason').value.trim()
+                     : (dispo==='dnc-confirmed' && L.block) ? L.block.msg : null,
+    skipped: !!skipped,
+    at: new Date().toISOString()
+  };
+  S.done[L.id] = rec;
+  if(dispo==='appointment') S.stats.appt++;
+
+  log(`${skipped?'Skipped':'Disposition'}: <b>${rec.label}</b> — ${L.name}` +
+      (note ? ` · note stored (${note.length} chars)` : ' · no note'),
+      dispo==='appointment' ? 'ok' : undefined);
+  if(rec.callbackAt)
+    log(`Callback scheduled for ${new Date(rec.callbackAt).toLocaleString()}`);
+  if(dispo==='dnc')
+    log(`${L.name} added to internal DNC — all future campaigns will block`,'bad');
+  // A retired compliance block gets its OWN audit line, visibly different from an ordinary skip. (P-8)
+  if(rec.complianceAck)
+    log(`🔐 COMPLIANCE: ${L.block ? L.block.code : '—'} acknowledged for ${L.name}` +
+        (rec.complianceReason ? ` — "${rec.complianceReason}"` : ''), 'bad');
+  if(rec.interrupted)
+    log(`Recorded as interrupted by ${rec.interrupted} after ${mmss(rec.talkSeconds)}`,'bad');
+
+  advance();
+}
+
+function advance(){
+  const nxt = nextIndex();
+  if(nxt === -1){
+    S.running=false; S.phase='idle'; S.idx=-1;
+    log('Session complete — no leads remaining','ok');
+    syncButtons(); render(); showSummary();
+    return;
+  }
+  if(S.killed){ S.phase='idle'; S.idx=-1; render(); return; }
+  // PAUSED IS NOT STOPPED. finish() used to set phase idle / idx -1 while leaving S.running true, so
+  // the stage drew "No session running -- Pick a campaign and press Start session" while the header
+  // button said "Resume" and Stop was enabled. (P-5)
+  if(S.paused){
+    S.phase='paused-hold'; S.idx=-1;
+    log('Paused — the next lead loads when you press Resume');
+    render();
+    return;
+  }
+  loadLead(nxt);
+}
+
+function showSummary(){
+  const recs = Object.entries(S.done);
+  const counts = {};
+  recs.forEach(([,r])=>{ counts[r.label] = (counts[r.label]||0)+1; });
+  const notes = recs.filter(([,r])=>r.note).length;
+  const acks = recs.filter(([,r])=>r.complianceAck).length;
+  const cbs = recs.filter(([,r])=>r.callbackAt).length;
+  const dfr = Object.keys(S.deferred).length;
+  $('#summaryBody').innerHTML =
+    `<div><b>${recs.length}</b> leads completed · <b>${dfr}</b> requeued · ` +
+    `<b>${S.stats.dialed}</b> dialled · <b>${S.stats.contact}</b> contacted · ` +
+    `<b>${mmss(S.talkTotal)}</b> talk time</div>` +
+    `<div style="margin-top:6px">` +
+    Object.entries(counts).map(([k,v])=>`${k}: <b>${v}</b>`).join(' · ') + `</div>` +
+    `<div style="margin-top:6px;color:var(--ink-faint)">${notes} notes stored · ${cbs} callbacks scheduled · ` +
+    `${acks} compliance acknowledgements</div>`;
+  $('#summaryWrap').style.display = 'block';
+}
+
+function syncButtons(){
+  $('#startBtn').disabled = S.running && !S.paused;
+  $('#pauseBtn').disabled = !S.running;
+  $('#stopBtn').disabled  = !S.running;
+  $('#pauseBtn').textContent = S.paused ? 'Resume' : 'Pause';
+  $('#startBtn').textContent = S.running ? 'Running…' : 'Start session';
+}
+
+/* ---------------- controls ---------------- */
+$('#startBtn').onclick = ()=>{
+  if(S.killed){ log('Kill switch is engaged — start refused','bad'); return; }
+  S.running=true; S.paused=false; S.idx=-1;
+  log(`Session started — campaign "${$('#campaign').value}"`,'ok');
+  syncButtons();
+  const n = nextIndex();
+  if(n===-1){ log('No eligible leads','bad'); S.running=false; syncButtons(); render(); return; }
+  loadLead(n);
+};
+
+$('#pauseBtn').onclick = ()=>{
+  S.paused = !S.paused;
+  log(S.paused ? 'Session paused — current call unaffected' : 'Session resumed');
+  syncButtons();
+  if(!S.paused && (S.phase==='idle' || S.phase==='paused-hold')){
+    const n=nextIndex(); if(n!==-1) loadLead(n); else { S.running=false; syncButtons(); render(); showSummary(); }
+  } else render();
+};
+
+/* An in-flight call cut by Stop or by the kill switch is RECORDED, not abandoned. There used to be
+ * no artefact at all: a live call ended and the session held no evidence it had ever happened.
+ * Given P08-08's purpose that may still be the right product decision, but it must be a deliberate,
+ * logged one rather than a silent gap. (P-11) */
+function recordInterruption(kind){
+  if(!(S.phase==='dialing' || S.phase==='connected')) return;
+  const L = LEADS[S.idx];
+  if(!L) return;
+  if(S.phase==='connected') S.talkTotal += S.elapsed;
+  S.interrupted = kind;
+  S.done[L.id] = {
+    dispo:'not-attempted', label:`Interrupted by ${kind}`,
+    note:($('#notes').value.trim() || null), callbackAt:null,
+    attempted:true, talkSeconds:S.elapsed, interrupted:kind,
+    blockCode:null, complianceAck:false, complianceReason:null,
+    skipped:false, at:new Date().toISOString()
+  };
+  log(`⚠ In-flight call to ${L.name} cut by ${kind} after ${mmss(S.elapsed)} — recorded as interrupted`,'bad');
+}
+
+$('#stopBtn').onclick = ()=>{
+  // Talk time already spent is talk time. Only hangUp() used to accrue it, so stopping (or killing)
+  // during a live call silently discarded the seconds from the session statistic.
+  recordInterruption('stop');
+  stopTick(); S.running=false; S.paused=false; S.phase='idle'; S.idx=-1;
+  log('Session stopped by the insurance agent');
+  syncButtons(); render();
+};
+
+$('#killBtn').onclick = ()=>{
+  S.killed = !S.killed;
+  $('#killBtn').classList.toggle('on', S.killed);
+  $('#killDot').className = 'dot' + (S.killed ? ' err' : '');
+  $('#killTxt').textContent = S.killed ? 'KILL SWITCH ENGAGED' : 'Kill switch: armed';
+  if(S.killed){
+    recordInterruption('kill-switch');
+    stopTick(); S.running=false; S.phase='idle'; S.idx=-1;
+    log('KILL SWITCH ENGAGED — all dialing halted','bad');
+    syncButtons(); render();
+  } else log('Kill switch released');
+};
+
+document.querySelectorAll('#dispo button').forEach(b=>{
+  b.onclick = ()=>{ S.dispo = b.dataset.d; renderDispo(); };
+});
+$('#saveBtn').onclick = ()=>{ if(S.dispo) finish(S.dispo, false); };
+// The commit button's enabled state depends on these, so they have to re-run the gate. (P-10, P-8)
+$('#cbTime').onchange = renderDispo;
+$('#cbTime').oninput = renderDispo;
+$('#ackBox').onchange = renderDispo;
+$('#ackReason').oninput = renderDispo;
+
+/* keyboard — an insurance agent runs this all day; the mouse is the slow path.
+ * ALL EIGHT outcomes are bound (1-8), and there is a commit key. Before, the keyboard path covered
+ * dialling and choosing and then stopped exactly at the step that happens on every lead. (P-3) */
+const HOTKEY = ['appointment','interested','callback','no-answer','voicemail',
+                'wrong-number','not-interested','dnc'];
+function commitFromKeyboard(){
+  if(!$('#saveBtn').disabled) $('#saveBtn').click();
+  else if(S.dispo) renderDispo();   // surfaces the reason it is still blocked
+}
+document.addEventListener('keydown', e=>{
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if(e.code==='Space'){
+    // A focused button must still activate on Space. Swallowing it here meant a keyboard-only
+    // insurance agent could Tab to "Save & next lead" or to a disposition and press Space to no
+    // effect -- the global handler cancelled the button's own activation and then did nothing,
+    // because neither branch below fires during wrap-up.
+    if(e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    if(S.phase==='ready') startDial();
+    else if(S.phase==='dialing'||S.phase==='connected') hangUp();
+    // The hand is already on Space from dialling, so Space commits during wrap-up. (P-11)
+    else if(S.phase==='wrapup'||S.phase==='blocked') commitFromKeyboard();
+  }
+  else if(e.key==='Enter'){
+    if(S.phase==='wrapup'||S.phase==='blocked'){ e.preventDefault(); commitFromKeyboard(); }
+  }
+  else if(e.key==='m'||e.key==='M'){ if(S.phase==='connected'){ S.muted=!S.muted; renderStage(); } }
+  else if(e.key==='s'||e.key==='S'){ skipLead(); }
+  else if(/^[1-8]$/.test(e.key)){
+    // Blocked leads take their outcomes from BLOCKED_ACTIONS, never from HOTKEY -- the call outcomes
+    // are not merely hidden there, they are unreachable. (P-7)
+    if(S.phase==='wrapup'){ S.dispo = HOTKEY[+e.key-1]; renderDispo(); }
+    else if(S.phase==='blocked'){
+      const L = LEADS[S.idx];
+      const cfg = L && L.block ? BLOCKED_ACTIONS[L.block.code] : null;
+      const pick = cfg && cfg.actions[+e.key-1];
+      if(pick){ S.dispo = pick.d; renderDispo(); }
+    }
+  }
+});
+
+/* ---------------- boot ---------------- */
+syncButtons();
+render();
+log('Prototype loaded. Nothing here dials a real number.');
+</script>
+</body>
+</html>
