@@ -17,13 +17,11 @@
        font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
   button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
   button:disabled{opacity:.35;cursor:not-allowed}
-
   /* ---- prototype banner: this must never be mistaken for working software ---- */
   .banner{background:repeating-linear-gradient(45deg,#3a2a00,#3a2a00 12px,#443100 12px,#443100 24px);
     color:#ffd479;padding:7px 16px;font-size:12.5px;font-weight:600;letter-spacing:.02em;
     display:flex;gap:10px;align-items:center;border-bottom:1px solid #5a4300}
   .banner b{color:#fff}
-
   header{display:flex;align-items:center;gap:18px;padding:12px 16px;
     background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
   .brand{font-weight:700;letter-spacing:-.01em}
@@ -32,22 +30,18 @@
   .stat{text-align:right}
   .stat b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
   .stat i{font-style:normal;font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em}
-
   .kill{display:flex;align-items:center;gap:8px;padding:6px 11px;border-radius:var(--r);
     background:var(--panel-2);border:1px solid var(--line);font-size:12.5px}
   .kill.on{border-color:var(--bad);color:#ffb9bb;background:#2a1416}
-
   main{display:grid;grid-template-columns:290px minmax(0,1fr) 330px;gap:12px;padding:12px;
     align-items:start}
   @media (max-width:1100px){main{grid-template-columns:1fr}}
-
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
   .panel > h2{margin:0;padding:11px 14px;font-size:12px;text-transform:uppercase;
     letter-spacing:.07em;color:var(--ink-dim);border-bottom:1px solid var(--line);
     display:flex;align-items:center;gap:8px}
   .panel > h2 .count{margin-left:auto;font-size:11px;color:var(--ink-faint)}
   .pad{padding:14px}
-
   /* ---- queue ---- */
   .queue{max-height:calc(100vh - 260px);overflow:auto}
   .lead{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);
@@ -63,12 +57,10 @@
   .pill.ok{color:var(--ok);border-color:#1e5c44;background:#11241d}
   .pill.bad{color:var(--bad);border-color:#5c2326;background:#241315}
   .pill.warn{color:var(--warn);border-color:#5c4718;background:#241f10}
-
   /* ---- call stage ---- */
   .stage{min-height:420px;display:flex;flex-direction:column}
   .idle{margin:auto;text-align:center;color:var(--ink-faint);padding:50px 20px}
   .idle h3{color:var(--ink-dim);font-weight:600;margin:0 0 6px}
-
   .contact{padding:18px;border-bottom:1px solid var(--line)}
   .contact .top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
   .contact h3{margin:0;font-size:22px;letter-spacing:-.02em}
@@ -78,7 +70,6 @@
   .fact i{display:block;font-style:normal;font-size:10.5px;text-transform:uppercase;
     letter-spacing:.06em;color:var(--ink-faint)}
   .fact b{font-weight:600;font-size:13px}
-
   .callbar{padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .status{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-faint)}
@@ -88,7 +79,6 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   .timer{font-family:var(--mono);font-size:26px;font-variant-numeric:tabular-nums;
     letter-spacing:-.01em;margin-left:auto}
-
   .btn{padding:9px 15px;border-radius:8px;border:1px solid var(--line);
     background:var(--panel-2);font-weight:600;font-size:13px;transition:.12s}
   .btn:not(:disabled):hover{border-color:#3d4b60;background:#242c3a}
@@ -98,7 +88,6 @@
   .btn.danger:not(:disabled):hover{background:#4a2124}
   .btn.on{background:#3a3410;border-color:#6b5f1c;color:#ffe49b}
   .row{display:flex;gap:8px;flex-wrap:wrap}
-
   .keypad{display:none;grid-template-columns:repeat(3,1fr);gap:7px;max-width:230px;
     padding:0 18px 16px}
   .keypad.show{display:grid}
@@ -106,13 +95,11 @@
     border:1px solid var(--line);font-family:var(--mono);font-size:15px}
   .keypad button:hover{background:#242c3a}
   .dtmf{font-family:var(--mono);color:var(--ink-dim);padding:0 18px 14px;min-height:20px;font-size:13px}
-
   .blocked{margin:18px;padding:14px;border-radius:var(--r);
     background:#241315;border:1px solid #5c2326}
   .blocked h4{margin:0 0 6px;color:#ffb9bb;font-size:13.5px}
   .blocked p{margin:0;color:#e8a9ac;font-size:12.5px}
   .blocked code{font-family:var(--mono);font-size:11.5px;color:#ffd0d2}
-
   /* ---- disposition ---- */
   .dispo{display:grid;grid-template-columns:1fr 1fr;gap:7px}
   .dispo button{padding:10px 8px;border-radius:8px;border:1px solid var(--line);
@@ -125,7 +112,6 @@
   textarea,input[type=datetime-local],select{width:100%;padding:9px;border-radius:8px;
     background:var(--bg);border:1px solid var(--line);color:var(--ink);font:inherit}
   textarea{min-height:74px;resize:vertical}
-
   .log{max-height:180px;overflow:auto;font-family:var(--mono);font-size:11.5px;
     color:var(--ink-dim);padding:10px 14px}
   .log div{padding:2px 0;border-bottom:1px solid #1e2531}
@@ -136,13 +122,11 @@
 </style>
 </head>
 <body>
-
 <div class="banner">
   <b>PROTOTYPE — NOT CONNECTED TO ANYTHING.</b>
-  Synthetic leads. No telephony provider, no GoHighLevel, no network calls. Every phone number is a
-  reserved 555 test number. This places no calls and writes nothing anywhere.
+  No telephony provider, no GoHighLevel, no network calls. Dialing is simulated in the browser and
+  never reaches any phone, real or fictional. This writes nothing anywhere outside this tab.
 </div>
-
 <header>
   <div class="brand">Insurance Dialer <span>/ power dialer session</span></div>
   <button class="kill" id="killBtn" title="Global stop — halts the session immediately">
@@ -156,7 +140,6 @@
     <div class="stat"><b id="sTalk">0:00</b><i>talk time</i></div>
   </div>
 </header>
-
 <main>
   <!-- ================= QUEUE ================= -->
   <section class="panel">
@@ -168,6 +151,17 @@
         <option>Medicare Supplement — FL — T65</option>
         <option>Auto — cross-sell — existing book</option>
       </select>
+
+      <label class="fld">Lead list</label>
+      <div class="row" style="align-items:center">
+        <button class="btn" id="csvBtn">Upload CSV…</button>
+        <input type="file" id="csvInput" accept=".csv,text/csv" style="display:none">
+        <button class="btn" id="csvSampleBtn" title="Download a CSV with the expected column headers">Download template</button>
+      </div>
+      <p style="margin:8px 0 0;font-size:11.5px;color:var(--ink-faint)" id="csvStatus">
+        Using 8 built-in sample leads. Upload a CSV to replace them.
+      </p>
+
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="startBtn">Start session</button>
         <button class="btn" id="pauseBtn" disabled>Pause</button>
@@ -177,7 +171,6 @@
     </div>
     <div class="queue" id="queue"></div>
   </section>
-
   <!-- ================= CALL STAGE ================= -->
   <section class="panel stage">
     <h2>Active call <span class="count" id="stageState">idle</span></h2>
@@ -192,7 +185,6 @@
       </div>
     </div>
   </section>
-
   <!-- ================= DISPOSITION ================= -->
   <section class="panel">
     <h2>Outcome <span class="count" id="dispoHint">after the call</span></h2>
@@ -210,20 +202,17 @@
         <button data-d="not-interested" class="neg"><kbd>7</kbd> 🚫 Not interested</button>
         <button data-d="dnc" class="neg"><kbd>8</kbd> ⛔ Add to DNC</button>
       </div>
-
       <!-- Non-contact actions. Shown ONLY on a blocked lead, and they REPLACE the eight outcomes
            above rather than sitting alongside them: a lead the compliance floor refused must not be
            recordable as "Appointment set" or "No answer", both of which assert a call was placed.
            (P-7) -->
       <div class="dispo" id="blockedActions" style="display:none"></div>
-
       <!-- A temporarily-blocked lead needs a way forward that is not "retire it". CALLING_WINDOW is
            temporary; the only affordance used to be a disposition, which permanently removed the
            consumer from the eligible count. (P-6) -->
       <div id="deferWrap" style="display:none;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:8px">
         <div style="font-size:12px;color:var(--ink-faint)" id="deferHint"></div>
       </div>
-
       <!-- Clearing a compliance block is a deliberate act, not a keystroke. (P-8) -->
       <div id="ackWrap" style="display:none;margin-top:10px;padding:10px;border:1px solid var(--bad);border-radius:8px">
         <label class="fld" for="ackReason">Compliance acknowledgement — required to retire a blocked lead</label>
@@ -233,22 +222,18 @@
         </div>
         <input type="text" id="ackReason" placeholder="Reason for retiring this blocked lead…" style="width:100%">
       </div>
-
       <div id="cbWrap" style="display:none">
         <label class="fld" for="cbTime">Callback date &amp; time <span style="color:var(--bad)">(required)</span></label>
         <input type="datetime-local" id="cbTime">
       </div>
-
       <!-- End-of-session surface. Committing the last lead used to drop straight to the idle card,
            so the session simply vanished with no completion summary. (P-4) -->
       <div id="summaryWrap" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--ok);border-radius:8px">
         <h4 style="margin:0 0 8px;font-size:13px">Session summary</h4>
         <div id="summaryBody" style="font-size:12px;line-height:1.6"></div>
       </div>
-
       <label class="fld" for="notes">Call notes <span style="text-transform:none;letter-spacing:0">(would sync to the CRM contact)</span></label>
       <textarea id="notes" placeholder="What was said…"></textarea>
-
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="saveBtn" disabled>Save &amp; next lead</button>
       </div>
@@ -258,22 +243,19 @@
     <div class="log" id="log"></div>
   </section>
 </main>
-
 <footer>
   Prototype for shaping the product, not the product. Compliance decisions shown here are
   <b>simulated in the browser</b>; the real ones must be made server-side and fail closed.
+  Uploaded lead lists stay in this browser tab only — nothing is dialed or transmitted.
 </footer>
-
 <script>
 "use strict";
-
 /* ------------------------------------------------------------------ *
- * Synthetic leads. 555-01xx is the reserved fictional range, so none
- * of these can ever ring a real handset even by accident.
- * `block` is a PRE-DECIDED compliance verdict, hard-coded per lead so
- * the blocked-call experience is visible without any engine existing.
+ * Built-in sample leads, used until the agent uploads a CSV. `block`
+ * is a PRE-DECIDED compliance verdict, hard-coded per lead so the
+ * blocked-call experience is visible without any engine existing.
  * ------------------------------------------------------------------ */
-const LEADS = [
+const SAMPLE_LEADS = [
   {id:'L-1041', name:'Dorothy Whitfield', phone:'+1 555-0142', age:71, state:'FL', tz:'ET',
    city:'Port Charlotte', product:'Final Expense', source:'Facebook lead form',
    lastTouch:'32 days ago', attempts:1, consent:'Written, 2026-06-19'},
@@ -302,6 +284,137 @@ const LEADS = [
    city:'Lakeland', product:'Final Expense', source:'Aged list — vendor B',
    lastTouch:'44 days ago', attempts:2, consent:'Written, 2026-05-28'},
 ];
+// The live working set. Starts as the sample leads; a CSV upload replaces it wholesale. Kept as a
+// `let` (not `const`) specifically so uploadLeads() can swap it out. Every other reference in this
+// file reads LEADS, so nothing else needs to change when the source of the list changes.
+let LEADS = SAMPLE_LEADS.map(L => ({...L}));
+
+/* ---------------- CSV lead upload ---------------- *
+ * Expected header row (case-insensitive, order doesn't matter):
+ *   name, phone, age, state, tz, city, product, source, last_touch, attempts, consent,
+ *   block_code, block_msg
+ * Only name and phone are required. Anything else missing gets a sane placeholder so the
+ * call stage never renders "undefined". block_code / block_msg are optional — leave both
+ * blank for an eligible lead, or set both to mark it compliance-blocked (e.g. INTERNAL_DNC).
+ * A block_code other than CALLING_WINDOW / INTERNAL_DNC / ATTEMPT_LIMIT is treated as a
+ * generic block so the outcome panel still shows a safe "confirm, don't call" affordance.
+ */
+const CSV_TEMPLATE =
+`name,phone,age,state,tz,city,product,source,last_touch,attempts,consent,block_code,block_msg
+Jane Example,+1 555-0100,68,FL,ET,Tampa,Final Expense,Facebook lead form,3 days ago,0,"Written, 2026-07-20",,
+John Blocked,+1 555-0101,70,FL,ET,Miami,Final Expense,Referral,10 days ago,1,None on file,INTERNAL_DNC,"On the internal do-not-call list."
+`;
+
+function parseCSV(text){
+  // Minimal RFC-4180-ish parser: handles quoted fields, escaped "" quotes, commas/newlines
+  // inside quotes. Good enough for a lead export; not a full CSV spec implementation.
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], next = text[i+1];
+    if(inQuotes){
+      if(c === '"' && next === '"'){ field += '"'; i++; }
+      else if(c === '"'){ inQuotes = false; }
+      else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\r'){ /* skip */ }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim() !== ''));
+}
+
+function normalizeHeader(h){ return h.trim().toLowerCase().replace(/[\s-]+/g,'_'); }
+
+function rowsToLeads(rows){
+  if(rows.length < 2) throw new Error('CSV needs a header row plus at least one lead row.');
+  const headers = rows[0].map(normalizeHeader);
+  const nameIdx = headers.indexOf('name');
+  const phoneIdx = headers.indexOf('phone');
+  if(nameIdx === -1 || phoneIdx === -1)
+    throw new Error('CSV must have "name" and "phone" columns.');
+  const get = (r, key) => { const i = headers.indexOf(key); return i === -1 ? '' : (r[i] || '').trim(); };
+  const leads = [];
+  const skipped = [];
+  rows.slice(1).forEach((r, i) => {
+    const name = (r[nameIdx] || '').trim();
+    const phone = (r[phoneIdx] || '').trim();
+    if(!name || !phone){ skipped.push(i+2); return; }
+    const blockCode = get(r, 'block_code');
+    const blockMsg = get(r, 'block_msg');
+    const attemptsRaw = get(r, 'attempts');
+    const lead = {
+      id: get(r,'id') || `CSV-${i+1}`,
+      name, phone,
+      age: (() => { const a = parseInt(get(r,'age'), 10); return Number.isFinite(a) ? a : null; })(),
+      state: get(r,'state') || '—',
+      tz: get(r,'tz') || '—',
+      city: get(r,'city') || '—',
+      product: get(r,'product') || '—',
+      source: get(r,'source') || 'CSV upload',
+      lastTouch: get(r,'last_touch') || 'Unknown',
+      attempts: Number.isFinite(parseInt(attemptsRaw,10)) ? parseInt(attemptsRaw,10) : 0,
+      consent: get(r,'consent') || 'Not recorded',
+    };
+    if(blockCode){
+      lead.block = { code: blockCode, msg: blockMsg || 'Blocked by uploaded lead data.' };
+      // Only known codes get a tailored remediation flow (requeue vs. retire). Anything else
+      // still gets treated as a hard, non-temporary block so the safe path is always "confirm,
+      // don't call" rather than silently falling through to the eight call outcomes.
+      if(!BLOCKED_ACTIONS[blockCode]){
+        BLOCKED_ACTIONS[blockCode] = {
+          temporary:false,
+          actions:[{d:'compliance-retired', label:'📁 Retire from this campaign', neg:true, primary:true}],
+          ack:`I confirm this lead is blocked (${blockCode}) and I am removing it from this campaign.`
+        };
+      }
+    }
+    leads.push(lead);
+  });
+  return { leads, skipped };
+}
+
+function uploadLeads(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const rows = parseCSV(String(reader.result));
+      const { leads, skipped } = rowsToLeads(rows);
+      if(!leads.length) throw new Error('No usable rows found (need at least name + phone).');
+      // Uploading a new list is a hard reset of the session, same as Stop: any in-flight call
+      // or partially-worked queue against the OLD list is meaningless against the new one.
+      if(S.running) hardStopForReload();
+      LEADS = leads;
+      S.done = {}; S.deferred = {}; S.stats = {dialed:0, contact:0, appt:0}; S.talkTotal = 0;
+      $('#csvStatus').textContent =
+        `Loaded ${leads.length} lead${leads.length===1?'':'s'} from ${file.name}` +
+        (skipped.length ? ` — skipped ${skipped.length} row(s) missing name/phone (line ${skipped.join(', ')}).` : '.');
+      log(`📄 Uploaded ${file.name} — ${leads.length} lead(s) loaded, replacing the previous list`,'ok');
+      if(skipped.length) log(`⚠ Skipped ${skipped.length} row(s) missing name or phone`,'bad');
+      render();
+    } catch(err){
+      $('#csvStatus').textContent = `Upload failed: ${err.message}`;
+      log(`Upload failed: ${err.message}`,'bad');
+    }
+  };
+  reader.onerror = () => {
+    $('#csvStatus').textContent = 'Could not read that file.';
+    log('CSV upload failed: file could not be read','bad');
+  };
+  reader.readAsText(file);
+}
+
+function hardStopForReload(){
+  recordInterruption('lead list replaced');
+  stopTick();
+  S.running = false; S.paused = false; S.phase = 'idle'; S.idx = -1;
+  log('Session stopped — a new lead list was uploaded','bad');
+  syncButtons();
+}
 
 const DISPO_LABEL = {
   'appointment':'Appointment set','interested':'Interested — follow up',
@@ -314,15 +427,15 @@ const DISPO_LABEL = {
   'compliance-retired':'Retired — compliance block acknowledged',
   'dnc-confirmed':'DNC confirmed — no call placed'
 };
-
 // Outcomes that ASSERT A CALL WAS PLACED. None of these may ever be recorded against a lead the
 // compliance floor refused, or against a lead that was skipped before dialling.
 const IMPLIES_CALL = new Set(['appointment','interested','callback','no-answer','voicemail','wrong-number','not-interested']);
-
 /* Per-block-code affordances. The old screen offered the same eight outcomes for all three codes,
  * so the same control meant different things on the same screen with nothing distinguishing them.
- * CALLING_WINDOW is TEMPORARY and its primary action is to requeue, not to retire. (P-6) */
-const BLOCKED_ACTIONS = {
+ * CALLING_WINDOW is TEMPORARY and its primary action is to requeue, not to retire. (P-6)
+ * This is `let`, not `const`: rowsToLeads() adds a generic entry here the first time it sees a
+ * block_code from an upload that isn't one of the three built-in ones. */
+let BLOCKED_ACTIONS = {
   CALLING_WINDOW: {
     temporary: true,
     defer: 'Requeue for 8:00 AM in the consumer’s time zone',
@@ -344,7 +457,6 @@ const BLOCKED_ACTIONS = {
     ack: 'I confirm this lead is over the campaign attempt cap and I am removing it from this campaign.'
   }
 };
-
 /* ---------------- state ---------------- */
 let S = {
   running:false, paused:false, killed:false,
@@ -354,7 +466,7 @@ let S = {
   t0:0, tick:null, elapsed:0, talkTotal:0,
   dispo:null,
   attempted:false,              // was a call actually PLACED on the current lead
-  interrupted:null,             // 'stop' | 'kill-switch' -- an in-flight call that was cut
+  interrupted:null,             // 'stop' | 'kill-switch' | 'lead list replaced' -- an in-flight call that was cut
   stats:{dialed:0, contact:0, appt:0},
   // S.done maps id -> a RECORD, not a bare disposition string. The note, the callback time, the
   // compliance reason and the interruption state all used to be dropped on the floor -- `finish()`
@@ -364,17 +476,14 @@ let S = {
   deferred:{},                  // id -> {reason, at} -- requeued, NOT retired (P-6)
   sessionStartedAt:null
 };
-
 // Blocked leads are counted from the RECORD SET, never incremented on load. `loadLead` used to do
 // `S.stats.blocked++` unconditionally, so stopping and restarting re-counted the same lead and the
 // sidebar figure climbed past the constant 3 shown in the queue header. Two numbers on one screen,
 // both labelled "blocked", disagreeing. (P-9)
 const blockedSeen = () => new Set(LEADS.filter(L => L.block && (S.done[L.id] || S.deferred[L.id] || (S.running && LEADS[S.idx] && LEADS[S.idx].id === L.id))).map(L => L.id));
-
 const $ = s => document.querySelector(s);
 const pad2 = n => String(n).padStart(2,'0');
 const mmss = s => `${Math.floor(s/60)}:${pad2(s%60)}`;
-
 function log(msg, kind){
   const d = document.createElement('div');
   const now = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -383,7 +492,6 @@ function log(msg, kind){
   if(kind==='ok')  d.style.color = 'var(--ok)';
   $('#log').prepend(d);
 }
-
 /* ---------------- render ---------------- */
 function renderQueue(){
   const q = $('#queue');
@@ -413,7 +521,6 @@ function renderQueue(){
     (dfr ? `<b>${dfr} requeued</b> · ` : '') +
     `${Object.keys(S.done).length} completed`;
 }
-
 function renderStats(){
   $('#sDialed').textContent  = S.stats.dialed;
   $('#sContact').textContent = S.stats.contact;
@@ -423,7 +530,6 @@ function renderStats(){
   $('#sBlocked').textContent = blockedSeen().size;
   $('#sTalk').textContent    = mmss(S.talkTotal);
 }
-
 function statusBits(){
   switch(S.phase){
     case 'dialing':   return ['ring','Dialing…'];
@@ -435,11 +541,9 @@ function statusBits(){
     default:          return ['','Idle'];
   }
 }
-
 function renderStage(){
   const body = $('#stageBody');
   $('#stageState').textContent = S.phase;
-
   // FOCUS SURVIVES THE RE-RENDER. `body.innerHTML = ...` discards and recreates every call-control
   // button, so focus fell back to <body> and Tab restarted from the top of the document -- on every
   // mute, every keypad toggle and every DTMF digit. A keyboard-only insurance agent lost their place
@@ -447,7 +551,6 @@ function renderStage(){
   const prevFocusId = document.activeElement && document.activeElement.id;
   const prevKey = document.activeElement && document.activeElement.dataset
                   ? document.activeElement.dataset.k : null;
-
   // A PAUSED SESSION SAYS IT IS PAUSED. It is still running, Stop is still live, and the header
   // button says "Resume" -- so the stage must not claim there is no session. (P-5)
   if(S.running && S.paused && S.idx < 0){
@@ -460,7 +563,6 @@ function renderStage(){
         <kbd>S</kbd> skip &nbsp; <kbd>1</kbd>–<kbd>8</kbd> outcome &nbsp; <kbd>Enter</kbd> save</div></div>`;
     return;
   }
-
   if(!S.running || S.idx < 0){
     body.innerHTML = `<div class="idle"><h3>${S.killed ? 'Session halted by kill switch' : 'No session running'}</h3>
       <div>${S.killed ? 'Re-arm the kill switch to continue.' : 'Pick a campaign and press <b>Start session</b>.'}</div>
@@ -469,10 +571,8 @@ function renderStage(){
         <kbd>S</kbd> skip &nbsp; <kbd>1</kbd>–<kbd>8</kbd> outcome &nbsp; <kbd>Enter</kbd> save</div></div>`;
     return;
   }
-
   const L = LEADS[S.idx];
   const [dotCls, label] = statusBits();
-
   body.innerHTML = `
     <div class="contact">
       <div class="top">
@@ -481,7 +581,7 @@ function renderStage(){
         <span class="pill ${L.block?'bad':'ok'}">${L.block ? L.block.code : 'eligible'}</span>
       </div>
       <div class="facts">
-        <div class="fact"><i>Age</i><b>${L.age}</b></div>
+        <div class="fact"><i>Age</i><b>${L.age ?? '—'}</b></div>
         <div class="fact"><i>Location</i><b>${L.city}, ${L.state} (${L.tz})</b></div>
         <div class="fact"><i>Product</i><b>${L.product}</b></div>
         <div class="fact"><i>Lead source</i><b>${L.source}</b></div>
@@ -491,7 +591,6 @@ function renderStage(){
         <div class="fact"><i>Record ID</i><b style="font-family:var(--mono)">${L.id}</b></div>
       </div>
     </div>
-
     ${L.block ? `
       <div class="blocked">
         <h4>⛔ This call was not placed</h4>
@@ -503,12 +602,10 @@ function renderStage(){
         }</p>
         <p style="margin-top:8px"><code>decision=DENY  rule=${L.block.code}  logged=immutable</code></p>
       </div>` : ''}
-
     <div class="callbar">
       <div class="status"><span class="dot ${dotCls}"></span>${label}</div>
       <div class="timer">${mmss(S.elapsed)}</div>
     </div>
-
     <div class="callbar" style="padding-top:0">
       <div class="row">
         <button class="btn primary" id="dialBtn">Dial</button>
@@ -519,12 +616,10 @@ function renderStage(){
         <button class="btn" id="skipBtn">Skip lead</button>
       </div>
     </div>
-
     <div class="keypad ${S.keypad?'show':''}" id="keypad">
       ${['1','2','3','4','5','6','7','8','9','*','0','#'].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
     </div>
     <div class="dtmf">${S.dtmf ? 'Sent: '+S.dtmf : ''}</div>`;
-
   // wire the freshly-rendered controls
   const dial = $('#dialBtn'), hang = $('#hangBtn');
   dial.disabled = !!L.block || S.phase !== 'ready';
@@ -533,7 +628,6 @@ function renderStage(){
   $('#padBtn').disabled  = S.phase!=='connected';
   $('#holdBtn').disabled = S.phase!=='connected';
   $('#skipBtn').disabled = S.phase==='dialing' || S.phase==='connected';
-
   dial.onclick = startDial;
   hang.onclick = hangUp;
   $('#muteBtn').onclick = ()=>{ S.muted=!S.muted; log(S.muted?'Muted':'Unmuted'); renderStage(); };
@@ -543,7 +637,6 @@ function renderStage(){
   document.querySelectorAll('#keypad button').forEach(b=>{
     b.onclick = ()=>{ S.dtmf += b.dataset.k; renderStage(); };
   });
-
   // Restore focus after the rebuild. (P-3.3)
   if(prevFocusId && $('#'+prevFocusId)) $('#'+prevFocusId).focus();
   else if(prevKey){
@@ -551,28 +644,23 @@ function renderStage(){
     if(again) again.focus();
   }
 }
-
 function renderDispo(){
   const wrap = S.phase==='wrapup';
   const blocked = S.phase==='blocked';
   const armed = wrap || blocked;
   const L = S.idx >= 0 ? LEADS[S.idx] : null;
   const cfg = (blocked && L && L.block) ? BLOCKED_ACTIONS[L.block.code] : null;
-
   $('#dispoHint').textContent = blocked ? 'non-contact outcomes only' : (armed ? 'choose one' : 'after the call');
-
   // ON A BLOCKED LEAD THE EIGHT CALL OUTCOMES ARE HIDDEN, not merely disabled. `renderDispo` used to
   // arm all eight whenever the phase was wrapup OR blocked, so a lead the compliance floor refused
   // could be recorded as "Appointment set" and S.stats.appt incremented -- an appointment attributed
   // to a call that was never placed. (P-7)
   $('#dispo').style.display = blocked ? 'none' : '';
   $('#blockedActions').style.display = blocked ? '' : 'none';
-
   document.querySelectorAll('#dispo button').forEach(b=>{
     b.disabled = !wrap;
     b.classList.toggle('sel', S.dispo === b.dataset.d);
   });
-
   if(blocked && cfg){
     $('#blockedActions').innerHTML = cfg.actions.map(a =>
       `<button data-d="${a.d}"${a.neg ? ' class="neg"' : ''}>${a.label}</button>`).join('');
@@ -592,14 +680,11 @@ function renderDispo(){
     $('#deferWrap').style.display = 'none';
     $('#ackWrap').style.display = 'none';
   }
-
   $('#cbWrap').style.display = (wrap && S.dispo==='callback') ? 'block' : 'none';
-
   // A callback with no time reads as handled and is not. (P-10)
   const cbMissing = (S.dispo==='callback' && !$('#cbTime').value);
   const ackMissing = (S.dispo==='compliance-retired' &&
                       (!$('#ackBox').checked || !$('#ackReason').value.trim()));
-
   const nxt = nextIndex();
   const last = (nxt === -1);
   // "Save & next lead" on the final lead contradicted the panel directly above it, which already
@@ -608,14 +693,11 @@ function renderDispo(){
   $('#saveBtn').disabled = !armed || !S.dispo || cbMissing || ackMissing;
   $('#saveBtn').title = cbMissing ? 'Choose a callback date and time first'
                       : ackMissing ? 'Tick the acknowledgement and give a reason first' : '';
-
   $('#nextPrev').textContent = !armed ? ''
     : last ? 'No leads remaining after this one.'
     : `Next up: ${LEADS[nxt].name} · ${LEADS[nxt].phone}`;
 }
-
 const render = ()=>{ renderQueue(); renderStats(); renderStage(); renderDispo(); };
-
 /* ---------------- session mechanics ---------------- */
 // A DEFERRED lead is skipped for the rest of this session but is NOT retired: it keeps no record in
 // S.done, so it stays in the eligible population for the next session. (P-6)
@@ -623,7 +705,6 @@ function nextIndex(){
   for(let i=S.idx+1;i<LEADS.length;i++) if(!S.done[LEADS[i].id] && !S.deferred[LEADS[i].id]) return i;
   return -1;
 }
-
 function loadLead(i){
   S.idx = i; S.dispo=null; S.muted=false; S.keypad=false; S.dtmf='';
   S.elapsed=0; S.attempted=false; S.interrupted=null; stopTick();
@@ -641,7 +722,6 @@ function loadLead(i){
   }
   render();
 }
-
 function startDial(){
   if(S.phase!=='ready') return;
   S.phase='dialing'; S.stats.dialed++; S.attempted=true;
@@ -661,7 +741,6 @@ function startDial(){
     render();
   }, 1600 + Math.random()*1400);
 }
-
 function hangUp(){
   if(!(S.phase==='dialing'||S.phase==='connected')) return;
   stopTick();
@@ -670,7 +749,6 @@ function hangUp(){
   S.phase='wrapup';
   render();
 }
-
 function startTick(){
   S.t0 = Date.now();
   S.tick = setInterval(()=>{
@@ -679,7 +757,6 @@ function startTick(){
   }, 250);
 }
 function stopTick(){ if(S.tick){ clearInterval(S.tick); S.tick=null; } }
-
 /* SKIP. Separated from finish() because "skip" is not an outcome -- it is the ABSENCE of one, and
  * conflating the two is what let `S` assert a call had happened.
  *
@@ -699,28 +776,20 @@ function skipLead(){
   if(S.dispo){ finish(S.dispo, false); return; }
   finish(S.attempted ? 'no-answer' : 'not-attempted', true);
 }
-
 function finish(dispo, skipped){
   const L = LEADS[S.idx];
-
   // LAST-LINE GUARD. Even if a future edit re-arms a call outcome on a blocked lead, the record is
   // refused here. The panel is the affordance; this is the invariant. (P-7)
   if(L.block && IMPLIES_CALL.has(dispo)){
     log(`Refused: "${DISPO_LABEL[dispo]}" asserts a call was placed, and ${L.block.code} blocked this lead`,'bad');
     return;
   }
-  if(!L.block && !S.attempted && IMPLIES_CALL.has(dispo) && dispo!=='no-answer'){
-    // Choosing an outcome without dialling is allowed for research-y outcomes but must not claim
-    // contact. Only no-answer is filtered separately below.
-  }
   if(!S.attempted && dispo==='no-answer'){
     log('Refused: "No answer" asserts a call was placed. Recorded as Not attempted instead.','bad');
     dispo = 'not-attempted';
   }
-
   const note = $('#notes').value.trim();
   const cbVal = $('#cbTime').value;
-
   if(dispo==='callback' && !cbVal){
     log('Refused: a callback needs a date and time','bad');
     return;
@@ -729,7 +798,6 @@ function finish(dispo, skipped){
     log('Refused: retiring a blocked lead needs the acknowledgement and a reason','bad');
     return;
   }
-
   // DEFER is a requeue, not a disposition: no record in S.done, so the lead stays eligible. (P-6)
   if(dispo==='defer'){
     S.deferred[L.id] = { reason: (L.block ? L.block.code : 'agent-deferred'), at: new Date().toISOString() };
@@ -737,7 +805,6 @@ function finish(dispo, skipped){
     advance();
     return;
   }
-
   // THE STRUCTURED RECORD. Everything the session needs to be reconstructed later. (P-2)
   const rec = {
     dispo,
@@ -756,7 +823,6 @@ function finish(dispo, skipped){
   };
   S.done[L.id] = rec;
   if(dispo==='appointment') S.stats.appt++;
-
   log(`${skipped?'Skipped':'Disposition'}: <b>${rec.label}</b> — ${L.name}` +
       (note ? ` · note stored (${note.length} chars)` : ' · no note'),
       dispo==='appointment' ? 'ok' : undefined);
@@ -770,10 +836,8 @@ function finish(dispo, skipped){
         (rec.complianceReason ? ` — "${rec.complianceReason}"` : ''), 'bad');
   if(rec.interrupted)
     log(`Recorded as interrupted by ${rec.interrupted} after ${mmss(rec.talkSeconds)}`,'bad');
-
   advance();
 }
-
 function advance(){
   const nxt = nextIndex();
   if(nxt === -1){
@@ -794,7 +858,6 @@ function advance(){
   }
   loadLead(nxt);
 }
-
 function showSummary(){
   const recs = Object.entries(S.done);
   const counts = {};
@@ -813,7 +876,6 @@ function showSummary(){
     `${acks} compliance acknowledgements</div>`;
   $('#summaryWrap').style.display = 'block';
 }
-
 function syncButtons(){
   $('#startBtn').disabled = S.running && !S.paused;
   $('#pauseBtn').disabled = !S.running;
@@ -821,7 +883,6 @@ function syncButtons(){
   $('#pauseBtn').textContent = S.paused ? 'Resume' : 'Pause';
   $('#startBtn').textContent = S.running ? 'Running…' : 'Start session';
 }
-
 /* ---------------- controls ---------------- */
 $('#startBtn').onclick = ()=>{
   if(S.killed){ log('Kill switch is engaged — start refused','bad'); return; }
@@ -832,7 +893,6 @@ $('#startBtn').onclick = ()=>{
   if(n===-1){ log('No eligible leads','bad'); S.running=false; syncButtons(); render(); return; }
   loadLead(n);
 };
-
 $('#pauseBtn').onclick = ()=>{
   S.paused = !S.paused;
   log(S.paused ? 'Session paused — current call unaffected' : 'Session resumed');
@@ -841,11 +901,10 @@ $('#pauseBtn').onclick = ()=>{
     const n=nextIndex(); if(n!==-1) loadLead(n); else { S.running=false; syncButtons(); render(); showSummary(); }
   } else render();
 };
-
-/* An in-flight call cut by Stop or by the kill switch is RECORDED, not abandoned. There used to be
- * no artefact at all: a live call ended and the session held no evidence it had ever happened.
- * Given P08-08's purpose that may still be the right product decision, but it must be a deliberate,
- * logged one rather than a silent gap. (P-11) */
+/* An in-flight call cut by Stop, the kill switch, or a lead-list reload is RECORDED, not abandoned.
+ * There used to be no artefact at all: a live call ended and the session held no evidence it had
+ * ever happened. Given P08-08's purpose that may still be the right product decision, but it must
+ * be a deliberate, logged one rather than a silent gap. (P-11) */
 function recordInterruption(kind){
   if(!(S.phase==='dialing' || S.phase==='connected')) return;
   const L = LEADS[S.idx];
@@ -861,7 +920,6 @@ function recordInterruption(kind){
   };
   log(`⚠ In-flight call to ${L.name} cut by ${kind} after ${mmss(S.elapsed)} — recorded as interrupted`,'bad');
 }
-
 $('#stopBtn').onclick = ()=>{
   // Talk time already spent is talk time. Only hangUp() used to accrue it, so stopping (or killing)
   // during a live call silently discarded the seconds from the session statistic.
@@ -870,7 +928,6 @@ $('#stopBtn').onclick = ()=>{
   log('Session stopped by the insurance agent');
   syncButtons(); render();
 };
-
 $('#killBtn').onclick = ()=>{
   S.killed = !S.killed;
   $('#killBtn').classList.toggle('on', S.killed);
@@ -883,7 +940,6 @@ $('#killBtn').onclick = ()=>{
     syncButtons(); render();
   } else log('Kill switch released');
 };
-
 document.querySelectorAll('#dispo button').forEach(b=>{
   b.onclick = ()=>{ S.dispo = b.dataset.d; renderDispo(); };
 });
@@ -893,7 +949,21 @@ $('#cbTime').onchange = renderDispo;
 $('#cbTime').oninput = renderDispo;
 $('#ackBox').onchange = renderDispo;
 $('#ackReason').oninput = renderDispo;
-
+/* ---------------- CSV controls ---------------- */
+$('#csvBtn').onclick = ()=> $('#csvInput').click();
+$('#csvInput').onchange = (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if(file) uploadLeads(file);
+  e.target.value = ''; // allow re-uploading the same filename later
+};
+$('#csvSampleBtn').onclick = ()=>{
+  const blob = new Blob([CSV_TEMPLATE], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'lead-list-template.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+};
 /* keyboard — an insurance agent runs this all day; the mouse is the slow path.
  * ALL EIGHT outcomes are bound (1-8), and there is a commit key. Before, the keyboard path covered
  * dialling and choosing and then stopped exactly at the step that happens on every lead. (P-3) */
@@ -934,11 +1004,10 @@ document.addEventListener('keydown', e=>{
     }
   }
 });
-
 /* ---------------- boot ---------------- */
 syncButtons();
 render();
-log('Prototype loaded. Nothing here dials a real number.');
+log('Prototype loaded. Nothing here dials a real number. Upload a CSV to bring in your own leads.');
 </script>
 </body>
 </html>
