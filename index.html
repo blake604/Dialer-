@@ -862,6 +862,31 @@ const render = ()=>{ renderQueue(); renderStats(); renderStage(); renderDispo();
  * a real person but hung up anyway because another line won the race (an "abandoned call" -- see
  * README.md's compliance section on the backend side of this feature).
  */
+// Requests to the backend carry this header so an ngrok free-tier tunnel doesn't intercept them
+// with its own HTML "you're about to visit..." warning page instead of reaching the actual server.
+// Harmless against any backend that isn't ngrok -- it's just an extra header nothing else looks at.
+const NGROK_BYPASS = { 'ngrok-skip-browser-warning': 'true' };
+// Parses a fetch Response as JSON, but fails with a READABLE error instead of the cryptic
+// "Unexpected token '<'" when the body isn't JSON at all -- which is what happens when the request
+// never reached the intended route (backend not redeployed with this route yet, wrong URL, a
+// platform's own 404 page, or an ngrok interstitial). Surfacing a snippet of the actual response
+// makes that failure diagnosable instead of a dead end.
+async function parseJsonResponse(resp, whatFailed){
+  const raw = await resp.text();
+  let data;
+  try{ data = JSON.parse(raw); }
+  catch(e){
+    throw new Error(
+      `${whatFailed}: backend returned non-JSON (HTTP ${resp.status}). This usually means the ` +
+      `request didn't reach the expected route -- check the backend URL, that the server has been ` +
+      `restarted/redeployed with the latest server.js, and (on ngrok's free tier) that the tunnel ` +
+      `isn't showing its browser-warning page. Response started with: ` +
+      `${raw.slice(0,150).replace(/\s+/g,' ').trim() || '(empty body)'}`
+    );
+  }
+  if(!resp.ok) throw new Error(data.error || `${whatFailed}: backend returned HTTP ${resp.status}`);
+  return data;
+}
 function syncPowerDialButton(){
   const btn = $('#powerDialBtn');
   if(!btn) return;
@@ -958,7 +983,7 @@ function endPowerDial(reason){
   if(S.twilio.call){ try{ S.twilio.call.disconnect(); }catch(e){} S.twilio.call = null; }
   if(PD.live && !PD.finished && S.twilio.backendUrl){
     fetch(`${S.twilio.backendUrl}/power-dial/end`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session:PD.id}),
+      method:'POST', headers:{'Content-Type':'application/json', ...NGROK_BYPASS}, body: JSON.stringify({session:PD.id}),
     }).catch(()=>{ /* best effort */ });
   }
   log(`Power dial session ended (${reason})`);
@@ -1006,10 +1031,9 @@ async function startPowerDialLive(leadIdxs){
   const numbers = leadIdxs.map(i => LEADS[i].phone);
   const url = S.twilio.backendUrl;
   const resp = await fetch(`${url}/power-dial/start`, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({numbers}),
+    method:'POST', headers:{'Content-Type':'application/json', ...NGROK_BYPASS}, body: JSON.stringify({numbers}),
   });
-  const data = await resp.json();
-  if(!resp.ok) throw new Error(data.error || `Backend returned HTTP ${resp.status}`);
+  const data = await parseJsonResponse(resp, 'Power dial failed to start');
   PD = {
     id: data.session, live:true, finished:false, winnerLeadIndex:null,
     legs: leadIdxs.map((li,n)=>({leadIndex:li, number:numbers[n], status:'queued', answeredBy:null, hungUpReason:null})),
@@ -1038,9 +1062,9 @@ function pollPowerDialStatus(){
   PD.pollTimer = setInterval(async ()=>{
     if(!PD || !PD.live || PD.finished){ if(PD && PD.pollTimer){ clearInterval(PD.pollTimer); PD.pollTimer=null; } return; }
     try{
-      const resp = await fetch(`${S.twilio.backendUrl}/power-dial/status?session=${PD.id}`);
+      const resp = await fetch(`${S.twilio.backendUrl}/power-dial/status?session=${PD.id}`, { headers: NGROK_BYPASS });
       if(!resp.ok) return; // transient — try again next tick
-      const data = await resp.json();
+      const data = await parseJsonResponse(resp, 'Power dial status check failed');
       data.legs.forEach((l,n)=>{
         if(!PD.legs[n]) return;
         PD.legs[n].status = l.status; PD.legs[n].answeredBy = l.answeredBy; PD.legs[n].hungUpReason = l.hungUpReason;
@@ -1055,10 +1079,14 @@ function pollPowerDialStatus(){
         }
       }
       renderStage();
-    } catch(e){ /* transient network hiccup — next poll will retry */ }
+    } catch(e){
+      // Surface it, but only once per session -- a flaky network shouldn't spam the log every second.
+      if(!PD.loggedPollError){ PD.loggedPollError = true; log(`Power dial status check error: ${e.message}`,'bad'); }
+    }
   }, 1000);
 }
 /* ---------------- session mechanics ---------------- */
+
 // A DEFERRED lead is skipped for the rest of this session but is NOT retired: it keeps no record in
 // S.done, so it stays in the eligible population for the next session. (P-6)
 function nextIndex(){
@@ -1433,7 +1461,7 @@ async function twilioConnect(){
   setTwilioStatus('Requesting access token…');
   $('#twilioConnectBtn').disabled = true;
   try{
-    const resp = await fetch(`${url}/token?identity=agent`);
+    const resp = await fetch(`${url}/token?identity=agent`, { headers: NGROK_BYPASS });
     if(!resp.ok) throw new Error(`Backend returned HTTP ${resp.status}`);
     const data = await resp.json();
     if(!data.token) throw new Error('Backend response had no token field');
@@ -1462,7 +1490,7 @@ async function twilioConnect(){
     // silently falling back to simulated mid-session with no explanation.
     device.on('tokenWillExpire', async () => {
       try{
-        const r = await fetch(`${url}/token?identity=agent`);
+        const r = await fetch(`${url}/token?identity=agent`, { headers: NGROK_BYPASS });
         const d = await r.json();
         device.updateToken(d.token);
         log('Twilio access token refreshed');
