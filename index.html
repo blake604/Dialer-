@@ -148,6 +148,7 @@
     <div class="stat"><b id="sContact">0</b><i>contacts</i></div>
     <div class="stat"><b id="sAppt">0</b><i>appts</i></div>
     <div class="stat"><b id="sBlocked">0</b><i>blocked</i></div>
+    <div class="stat"><b id="sAbandoned">0</b><i>abandoned</i></div>
     <div class="stat"><b id="sTalk">0:00</b><i>talk time</i></div>
   </div>
 </header>
@@ -180,7 +181,7 @@
            ever place a real call. -->
       <div class="twilio-box">
         <label class="fld" style="margin-top:0">Live calling (Twilio) — backend URL</label>
-        <input type="text" id="twilioBackendUrl" placeholder="https://data-dialer.com/">
+        <input type="text" id="twilioBackendUrl" placeholder="https://your-backend.example.com">
         <div class="row">
           <button class="btn" id="twilioConnectBtn">Connect</button>
         </div>
@@ -200,6 +201,17 @@
         <button class="btn" id="stopBtn" disabled>Stop</button>
       </div>
       <p style="margin:12px 0 0;font-size:12px;color:var(--ink-faint)" id="eligLine"></p>
+      <!-- POWER DIAL. Ticking leads below (max 5) and pressing this rings all of them at once and
+           connects to whichever answers first -- see the compliance note in the footer and in
+           README.md before this is ever pointed at a real backend. Simulated by default, exactly
+           like the single-call Dial button, until the same two live-calling gates are open. -->
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="powerDialBtn" disabled>Power dial selected (0/5)</button>
+      </div>
+      <p style="margin:6px 0 0;font-size:11px;color:var(--ink-faint)">
+        Tick up to 5 eligible leads in the queue below, then Power dial. Whichever line answers
+        first connects to you; the rest are disconnected automatically.
+      </p>
     </div>
     <div class="queue" id="queue"></div>
   </section>
@@ -279,6 +291,9 @@
   Prototype for shaping the product, not the product. Compliance decisions shown here are
   <b>simulated in the browser</b>; the real ones must be made server-side and fail closed.
   Uploaded lead lists stay in this browser tab only — nothing is dialed or transmitted.
+  Power dial rings multiple real numbers at once and disconnects whichever don't answer first —
+  that's regulated as predictive dialing (FCC/FTC abandoned-call rules); see the backend README
+  before using it against real leads.
 </footer>
 <!-- Twilio Voice JS SDK. As of 2.0 Twilio no longer hosts this on their own CDN (npm or a
      self-hosted copy from GitHub Releases is their recommended path) -- this is jsDelivr's mirror
@@ -380,6 +395,21 @@ function findColumn(headers, aliases){
   return -1;
 }
 
+// Twilio (and the rest of the phone system) wants E.164: a leading "+" and country code.
+// This agency's own quote-form export writes phone numbers as bare 10-digit strings with no "+1"
+// at all -- which is exactly what caused a real dial to get rejected by Twilio's gateway instead
+// of ever ringing. Only add "+1" when the shape is unambiguous (10 digits, or 11 starting with a
+// leading 1); anything else (international numbers, garbage, extensions) is left untouched rather
+// than guessed at incorrectly.
+function normalizePhone(raw){
+  const v = (raw || '').trim();
+  if(!v || v.startsWith('+')) return v;
+  const digits = v.replace(/\D/g, '');
+  if(digits.length === 10) return `+1${digits}`;
+  if(digits.length === 11 && digits[0] === '1') return `+${digits}`;
+  return v;
+}
+
 function rowsToLeads(rows){
   if(rows.length < 2) throw new Error('CSV needs a header row plus at least one lead row.');
   const headers = rows[0].map(normalizeHeader);
@@ -405,7 +435,7 @@ function rowsToLeads(rows){
   const skipped = [];
   rows.slice(1).forEach((r, i) => {
     const name = (r[nameIdx] || '').trim();
-    const phone = (r[phoneIdx] || '').trim();
+    const phone = normalizePhone(r[phoneIdx]);
     if(!name || !phone){ skipped.push(i+2); return; }
     const blockCode = get(r, 'block_code');
     const blockMsg = get(r, 'block_msg');
@@ -538,7 +568,7 @@ let S = {
   dispo:null,
   attempted:false,              // was a call actually PLACED on the current lead
   interrupted:null,             // 'stop' | 'kill-switch' | 'lead list replaced' -- an in-flight call that was cut
-  stats:{dialed:0, contact:0, appt:0},
+  stats:{dialed:0, contact:0, appt:0, abandoned:0},
   // S.done maps id -> a RECORD, not a bare disposition string. The note, the callback time, the
   // compliance reason and the interruption state all used to be dropped on the floor -- `finish()`
   // read the note only to log "note saved (N chars)", which asserted the opposite of what happened.
@@ -553,6 +583,14 @@ let S = {
   // both gates have been deliberately opened.
   twilio: { device:null, call:null, liveEnabled:false, backendUrl:'' }
 };
+// Leads ticked in the queue for the NEXT power dial (Set of lead ids). Cleared the moment a power
+// dial launches -- this is a staging selection, not part of the session record.
+let pdSelected = new Set();
+// The ACTIVE power-dial session, or null when none is running. Same shape whether simulated or
+// live, so connectPowerDialWinner()/renderStage() don't need to know which. `finished` flips true
+// the instant a winner is chosen; before that, renderStage() shows the ringing-legs view instead of
+// the normal per-lead view.
+let PD = null;
 // Blocked leads are counted from the RECORD SET, never incremented on load. `loadLead` used to do
 // `S.stats.blocked++` unconditionally, so stopping and restarting re-counted the same lead and the
 // sidebar figure climbed past the constant 3 shown in the queue header. Two numbers on one screen,
@@ -582,12 +620,34 @@ function renderQueue(){
       : S.deferred[L.id] ? `<span class="pill">⏳ requeued</span>`
       : L.block ? `<span class="pill bad">blocked</span>`
                 : `<span class="pill ok">eligible</span>`;
-    el.innerHTML = `<div class="grow">
+    // Power dial selection checkbox. Only offered on leads that could actually be dialed -- not
+    // blocked, not already completed. A bare spacer keeps the row aligned when there's no checkbox.
+    const selectable = !L.block && !rec;
+    const cb = selectable
+      ? `<input type="checkbox" class="pdCheck" data-id="${L.id}" title="Select for power dial"
+           ${pdSelected.has(L.id)?'checked':''} style="margin-top:3px">`
+      : `<span style="display:inline-block;width:13px"></span>`;
+    el.innerHTML = `${cb}<div class="grow">
         <div class="nm">${L.name}</div>
         <div class="meta">${L.phone} · ${L.city}, ${L.state} · ${L.attempts} prior</div>
       </div>${verdict}`;
     q.appendChild(el);
   });
+  document.querySelectorAll('.pdCheck').forEach(cb=>{
+    cb.onchange = ()=>{
+      const id = cb.dataset.id;
+      if(cb.checked){
+        if(pdSelected.size >= 5){
+          cb.checked = false;
+          log('Power dial supports up to 5 leads at once — deselect one first','bad');
+          return;
+        }
+        pdSelected.add(id);
+      } else pdSelected.delete(id);
+      syncPowerDialButton();
+    };
+  });
+  syncPowerDialButton();
   const elig = LEADS.filter(L=>!L.block && !S.done[L.id]).length;
   const blk  = LEADS.filter(L=>L.block).length;
   const dfr  = Object.keys(S.deferred).length;
@@ -606,6 +666,16 @@ function renderStats(){
   // constant shown in the queue header. (P-9)
   $('#sBlocked').textContent = blockedSeen().size;
   $('#sTalk').textContent    = mmss(S.talkTotal);
+  // Abandoned calls -- a human answered a power-dial leg that then got hung up because a different
+  // line answered first. Colored bad once the rate crosses the 3% FCC/FTC ceiling this prototype
+  // does not itself enforce (see README.md). Rate is abandoned / (abandoned + actual contacts),
+  // i.e. of all the human answers this session got, what fraction were dropped rather than talked to.
+  const sAb = $('#sAbandoned');
+  sAb.textContent = S.stats.abandoned;
+  const humanAnswers = S.stats.contact + S.stats.abandoned;
+  const abRate = humanAnswers ? (S.stats.abandoned / humanAnswers) * 100 : 0;
+  sAb.style.color = abRate > 3 ? 'var(--bad)' : '';
+  sAb.title = humanAnswers ? `${abRate.toFixed(1)}% of human answers this session` : '';
 }
 function statusBits(){
   switch(S.phase){
@@ -620,6 +690,9 @@ function statusBits(){
 }
 function renderStage(){
   const body = $('#stageBody');
+  // A power-dial session that hasn't produced a winner yet owns the stage completely -- it isn't
+  // "a lead is loaded", so none of the per-lead phase logic below applies until PD.finished.
+  if(PD && !PD.finished){ $('#stageState').textContent = 'power dialing'; renderPowerDialLegs(); return; }
   $('#stageState').textContent = S.phase;
   // FOCUS SURVIVES THE RE-RENDER. `body.innerHTML = ...` discards and recreates every call-control
   // button, so focus fell back to <body> and Tab restarted from the top of the document -- on every
@@ -778,7 +851,213 @@ function renderDispo(){
     : last ? 'No leads remaining after this one.'
     : `Next up: ${LEADS[nxt].name} · ${LEADS[nxt].phone}`;
 }
-const render = ()=>{ renderQueue(); renderStats(); renderStage(); renderDispo(); };
+const render = ()=>{ renderQueue(); renderStats(); renderStage(); renderDispo(); syncButtons(); };
+
+/* ================= POWER DIAL ================= *
+ * Rings up to 5 leads at once (simulated by default, real once both live-calling gates from the
+ * Twilio section are open, mirroring startDial()'s own simulated/live split). Whichever leg
+ * "answers" first becomes the connected call and falls through into the EXACT SAME connected-call
+ * / disposition flow a normal single dial uses -- see connectPowerDialWinner(). The other legs are
+ * recorded immediately and honestly, including a distinct record for any leg that was answered by
+ * a real person but hung up anyway because another line won the race (an "abandoned call" -- see
+ * README.md's compliance section on the backend side of this feature).
+ */
+function syncPowerDialButton(){
+  const btn = $('#powerDialBtn');
+  if(!btn) return;
+  btn.textContent = `Power dial selected (${pdSelected.size}/5)`;
+  const busy = (PD && !PD.finished) || S.phase==='dialing' || S.phase==='connected';
+  btn.disabled = pdSelected.size < 1 || busy;
+}
+function renderPowerDialLegs(){
+  const body = $('#stageBody');
+  const legLabel = (leg)=>{
+    if(leg.status==='connected') return ['live','Connected'];
+    if(leg.answeredBy && leg.answeredBy.startsWith('machine')) return ['err','Machine detected — released'];
+    if(leg.answeredBy === 'fax') return ['err','Fax detected — released'];
+    if(leg.hungUpReason==='abandoned-lost-race') return ['err','Answered — abandoned (lost race)'];
+    if(leg.hungUpReason==='lost-race') return ['','Stopped — another line answered'];
+    if(leg.status==='completed') return ['','No answer'];
+    if(leg.status==='ringing') return ['ring','Ringing…'];
+    return ['ring','Dialing…'];
+  };
+  const rows = PD.legs.map(leg=>{
+    const L = LEADS[leg.leadIndex];
+    const [dotCls,label] = legLabel(leg);
+    return `<div class="lead">
+        <span class="dot ${dotCls}" style="margin-top:5px"></span>
+        <div class="grow">
+          <div class="nm">${L.name}</div>
+          <div class="meta">${L.phone}</div>
+        </div>
+        <span class="pill ${dotCls==='live'?'ok':dotCls==='err'?'bad':''}">${label}</span>
+      </div>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="pad">
+      <h3 style="margin:0 0 4px">Power dial in progress — ${PD.legs.length} line(s) ringing</h3>
+      <p style="color:var(--ink-faint);font-size:12px;margin:0 0 12px">
+        Connecting to whichever line answers first. The rest will be disconnected automatically.
+      </p>
+      ${rows}
+      <div class="row" style="margin-top:14px">
+        <button class="btn danger" id="pdAbortBtn">Abort — hang up all lines</button>
+      </div>
+    </div>`;
+  $('#pdAbortBtn').onclick = ()=>{
+    if(S.twilio.call){ S.twilio.call.disconnect(); } else endPowerDial('agent-aborted');
+  };
+}
+// Fires once, regardless of simulated/live, the instant a winner is chosen. From here on this
+// behaves EXACTLY like a normal connected call -- same timer, same mute/hold/keypad, same
+// disposition panel -- the only difference is which lead ended up in S.idx.
+function connectPowerDialWinner(){
+  PD.finished = true;
+  S.idx = PD.winnerLeadIndex;
+  S.dispo = null; S.muted = false; S.keypad = false; S.dtmf = '';
+  S.elapsed = 0; S.attempted = true; S.interrupted = null;
+  $('#notes').value = ''; $('#cbTime').value = '';
+  S.phase = 'connected';
+  S.stats.dialed += PD.legs.length; // every leg was a genuine dial attempt, not just the winner
+  S.stats.contact++;
+  startTick();
+  const L = LEADS[S.idx];
+  log(`📞 Power dial connected — ${L.name} (${L.phone}) answered first of ${PD.legs.length}`,'ok');
+  PD.legs.forEach(leg=>{
+    if(leg.leadIndex === PD.winnerLeadIndex) return;
+    const other = LEADS[leg.leadIndex];
+    let dispo, note;
+    if(leg.answeredBy && leg.answeredBy.startsWith('machine')){
+      dispo = 'voicemail'; note = 'Power dial: reached voicemail; call released automatically, nothing left.';
+    } else if(leg.hungUpReason === 'abandoned-lost-race'){
+      dispo = 'not-attempted';
+      note = '⚠ ABANDONED CALL — this consumer answered but was disconnected because another line answered first.';
+      S.stats.abandoned++;
+      log(`⚠ ABANDONED CALL recorded — ${other.name} answered and was disconnected (power dial race)`,'bad');
+    } else {
+      dispo = 'no-answer'; note = 'Power dial: still ringing when another line answered first.';
+    }
+    S.done[other.id] = {
+      dispo, label: DISPO_LABEL[dispo] || dispo, note, callbackAt:null,
+      attempted:true, talkSeconds:0, interrupted:null, blockCode:null,
+      complianceAck:false, complianceReason:null, skipped:false,
+      at:new Date().toISOString(), powerDialSession: PD.id,
+    };
+  });
+  render();
+}
+// Cleans up a session that never produced a winner (agent aborted, or the agent's own leg dropped
+// before anyone answered). A FINISHED session is torn down instead by finish() once the winning
+// lead's disposition is saved -- see the `PD = null;` there.
+function endPowerDial(reason){
+  if(!PD) return;
+  if(PD.pollTimer){ clearInterval(PD.pollTimer); PD.pollTimer = null; }
+  PD.legs.forEach(leg=>{ if(leg.timer) clearTimeout(leg.timer); });
+  // The agent's own leg (if any) is already gone or on its way out by the time this runs -- don't
+  // leave a stale, disconnected Call object sitting in S.twilio.call for the next dial to trip over.
+  if(S.twilio.call){ try{ S.twilio.call.disconnect(); }catch(e){} S.twilio.call = null; }
+  if(PD.live && !PD.finished && S.twilio.backendUrl){
+    fetch(`${S.twilio.backendUrl}/power-dial/end`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({session:PD.id}),
+    }).catch(()=>{ /* best effort */ });
+  }
+  log(`Power dial session ended (${reason})`);
+  PD = null;
+  render();
+}
+function startPowerDialSimulated(leadIdxs){
+  PD = {
+    id: 'sim-'+Date.now(), live:false, finished:false, winnerLeadIndex:null,
+    legs: leadIdxs.map(li=>({leadIndex:li, number:LEADS[li].phone, status:'ringing', answeredBy:null, hungUpReason:null})),
+  };
+  log(`📞 Power dial (simulated) — ringing ${leadIdxs.length} line(s) at once`,'ok');
+  render();
+  PD.legs.forEach(leg=>{
+    leg.timer = setTimeout(()=>{
+      if(!PD || PD.legs.indexOf(leg) === -1) return;
+      const roll = Math.random();
+      if(roll < 0.15){
+        leg.answeredBy = 'machine_end_beep'; leg.status = 'completed'; leg.hungUpReason = 'machine-detected';
+        log(`${LEADS[leg.leadIndex].name}: voicemail detected (simulated), line released`);
+        renderStage();
+        return;
+      }
+      if(roll < 0.55){
+        if(PD.winnerLeadIndex == null){
+          leg.status = 'connected';
+          PD.legs.forEach(o=>{
+            if(o!==leg){ if(o.timer) clearTimeout(o.timer); if(o.status==='ringing'){ o.status='completed'; o.hungUpReason='lost-race'; } }
+          });
+          PD.winnerLeadIndex = leg.leadIndex;
+          connectPowerDialWinner();
+        } else {
+          leg.status = 'completed'; leg.hungUpReason = 'abandoned-lost-race';
+          renderStage(); // connectPowerDialWinner() will also record this leg's fate below via PD.legs
+        }
+        return;
+      }
+      leg.status = 'completed';
+      log(`${LEADS[leg.leadIndex].name}: no answer (simulated)`);
+      renderStage();
+    }, 1200 + Math.random()*3200);
+  });
+}
+async function startPowerDialLive(leadIdxs){
+  const numbers = leadIdxs.map(i => LEADS[i].phone);
+  const url = S.twilio.backendUrl;
+  const resp = await fetch(`${url}/power-dial/start`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({numbers}),
+  });
+  const data = await resp.json();
+  if(!resp.ok) throw new Error(data.error || `Backend returned HTTP ${resp.status}`);
+  PD = {
+    id: data.session, live:true, finished:false, winnerLeadIndex:null,
+    legs: leadIdxs.map((li,n)=>({leadIndex:li, number:numbers[n], status:'queued', answeredBy:null, hungUpReason:null})),
+  };
+  render();
+  log(`⚠ LIVE — power dialing ${numbers.length} real number(s) at once via Twilio…`,'bad');
+  const call = await S.twilio.device.connect({ params: { Conference: data.session } });
+  S.twilio.call = call;
+  call.on('accept', ()=> log('Agent leg joined the power-dial conference','ok'));
+  // Before a winner exists, ending this call means aborting the whole session. After a winner
+  // exists, ending it is an ordinary call ending -- route it through the SAME twilioCallEnded()
+  // path a single dial uses, so wrap-up/disposition behave identically either way.
+  const ended = (reason) => () => {
+    if(S.twilio.call !== call) return;
+    if(PD && PD.finished) twilioCallEnded(reason);
+    else endPowerDial('agent-ended-before-connect');
+  };
+  call.on('disconnect', ended('disconnect'));
+  call.on('cancel', ended('cancel'));
+  call.on('reject', ended('reject'));
+  call.on('error', (err) => { log(`Power dial agent leg error: ${err.message}`,'bad'); ended('error')(); });
+  pollPowerDialStatus();
+}
+function pollPowerDialStatus(){
+  if(!PD || !PD.live) return;
+  PD.pollTimer = setInterval(async ()=>{
+    if(!PD || !PD.live || PD.finished){ if(PD && PD.pollTimer){ clearInterval(PD.pollTimer); PD.pollTimer=null; } return; }
+    try{
+      const resp = await fetch(`${S.twilio.backendUrl}/power-dial/status?session=${PD.id}`);
+      if(!resp.ok) return; // transient — try again next tick
+      const data = await resp.json();
+      data.legs.forEach((l,n)=>{
+        if(!PD.legs[n]) return;
+        PD.legs[n].status = l.status; PD.legs[n].answeredBy = l.answeredBy; PD.legs[n].hungUpReason = l.hungUpReason;
+      });
+      if(PD.winnerLeadIndex == null){
+        const winnerIdx = data.legs.findIndex(l => l.status === 'connected');
+        if(winnerIdx !== -1){
+          clearInterval(PD.pollTimer); PD.pollTimer = null;
+          PD.winnerLeadIndex = PD.legs[winnerIdx].leadIndex;
+          connectPowerDialWinner();
+          return;
+        }
+      }
+      renderStage();
+    } catch(e){ /* transient network hiccup — next poll will retry */ }
+  }, 1000);
+}
 /* ---------------- session mechanics ---------------- */
 // A DEFERRED lead is skipped for the rest of this session but is NOT retired: it keeps no record in
 // S.done, so it stays in the eligible population for the next session. (P-6)
@@ -968,6 +1247,10 @@ function finish(dispo, skipped){
         (rec.complianceReason ? ` — "${rec.complianceReason}"` : ''), 'bad');
   if(rec.interrupted)
     log(`Recorded as interrupted by ${rec.interrupted} after ${mmss(rec.talkSeconds)}`,'bad');
+  // The power-dial session this lead came from (if any) is done once its disposition is saved --
+  // the other 4 legs' fates were already recorded in connectPowerDialWinner(). Tear down the
+  // staging object so the queue checkboxes/button return to their normal state.
+  if(PD && PD.finished) PD = null;
   advance();
 }
 function advance(){
@@ -1009,7 +1292,9 @@ function showSummary(){
   $('#summaryWrap').style.display = 'block';
 }
 function syncButtons(){
-  $('#startBtn').disabled = S.running && !S.paused;
+  // A power dial that hasn't produced a winner yet owns the stage; starting a normal session
+  // underneath it would set S.idx against a lead the stage isn't even showing.
+  $('#startBtn').disabled = (S.running && !S.paused) || (PD && !PD.finished);
   $('#pauseBtn').disabled = !S.running;
   $('#stopBtn').disabled  = !S.running;
   $('#pauseBtn').textContent = S.paused ? 'Resume' : 'Pause';
@@ -1060,9 +1345,23 @@ $('#stopBtn').onclick = ()=>{
   // Talk time already spent is talk time. Only hangUp() used to accrue it, so stopping (or killing)
   // during a live call silently discarded the seconds from the session statistic.
   recordInterruption('stop');
+  // A power dial still ringing (no winner yet) isn't covered by recordInterruption() -- S.phase
+  // isn't 'dialing'/'connected' at that point. Stop must still hang up every ringing line.
+  if(PD && !PD.finished){ if(S.twilio.call) S.twilio.call.disconnect(); else endPowerDial('stop'); }
   stopTick(); S.running=false; S.paused=false; S.phase='idle'; S.idx=-1;
   log('Session stopped by the insurance agent');
   syncButtons(); render();
+};
+$('#powerDialBtn').onclick = async ()=>{
+  if(pdSelected.size < 1) return;
+  const leadIdxs = LEADS.map((L,i)=>i).filter(i=>pdSelected.has(LEADS[i].id));
+  pdSelected.clear();
+  if(S.twilio.liveEnabled && S.twilio.device){
+    try{ await startPowerDialLive(leadIdxs); }
+    catch(err){ log(`Power dial failed to start: ${err.message}`,'bad'); PD=null; render(); }
+  } else {
+    startPowerDialSimulated(leadIdxs);
+  }
 };
 $('#killBtn').onclick = ()=>{
   S.killed = !S.killed;
@@ -1071,6 +1370,9 @@ $('#killBtn').onclick = ()=>{
   $('#killTxt').textContent = S.killed ? 'KILL SWITCH ENGAGED' : 'Kill switch: armed';
   if(S.killed){
     recordInterruption('kill-switch'); // also disconnects any live Twilio call, see above
+    // Same gap as Stop: a power dial still ringing isn't in S.phase 'dialing'/'connected' yet, so
+    // recordInterruption() above wouldn't touch it. The kill switch must still stop every line.
+    if(PD && !PD.finished){ if(S.twilio.call) try{ S.twilio.call.disconnect(); }catch(e){} else endPowerDial('kill-switch'); }
     // The kill switch must also close the live-calling gate itself, not just the call in progress --
     // otherwise re-arming and starting a new session would immediately be live again with no
     // fresh confirmation. Re-enabling requires ticking the checkbox again.
