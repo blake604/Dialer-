@@ -22,6 +22,17 @@
     color:#ffd479;padding:7px 16px;font-size:12.5px;font-weight:600;letter-spacing:.02em;
     display:flex;gap:10px;align-items:center;border-bottom:1px solid #5a4300}
   .banner b{color:#fff}
+  /* LIVE MODE must look unmistakably different from the simulated banner -- red, not amber, and
+     the copy changes from "places no calls" to "REAL CALLS". A palette swap is the whole point. */
+  .banner.live-mode{background:repeating-linear-gradient(45deg,#3a1015,#3a1015 12px,#4a161b 12px,#4a161b 24px);
+    color:#ffd7d9;border-bottom-color:#7a2b30}
+  .banner.live-mode b{color:#fff}
+  .twilio-box{margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:8px}
+  .twilio-box input[type=text]{margin-bottom:8px}
+  .twilio-box .row{align-items:center}
+  .twilio-status{display:block;margin-top:6px;font-size:11.5px;color:var(--ink-faint)}
+  .live-check{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;line-height:1.4}
+  .live-check input{margin-top:3px}
   header{display:flex;align-items:center;gap:18px;padding:12px 16px;
     background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
   .brand{font-weight:700;letter-spacing:-.01em}
@@ -122,7 +133,7 @@
 </style>
 </head>
 <body>
-<div class="banner">
+<div class="banner" id="modeBanner">
   <b>PROTOTYPE — NOT CONNECTED TO ANYTHING.</b>
   No telephony provider, no GoHighLevel, no network calls. Dialing is simulated in the browser and
   never reaches any phone, real or fictional. This writes nothing anywhere outside this tab.
@@ -161,6 +172,27 @@
       <p style="margin:8px 0 0;font-size:11.5px;color:var(--ink-faint)" id="csvStatus">
         Using 8 built-in sample leads. Upload a CSV to replace them.
       </p>
+
+      <!-- LIVE CALLING. Off by default, and stays off until two separate, deliberate actions
+           happen: (1) Connect succeeds against a real backend, and (2) the agent explicitly ticks
+           "Enable live calling" past a confirmation. Simulated dialing is the default and the
+           fallback for anything that isn't both of those -- opening this file does not, by itself,
+           ever place a real call. -->
+      <div class="twilio-box">
+        <label class="fld" style="margin-top:0">Live calling (Twilio) — backend URL</label>
+        <input type="text" id="twilioBackendUrl" placeholder="https://your-backend.example.com">
+        <div class="row">
+          <button class="btn" id="twilioConnectBtn">Connect</button>
+        </div>
+        <span class="twilio-status" id="twilioStatus">Not connected — dialing is simulated.</span>
+        <div class="live-check">
+          <input type="checkbox" id="liveModeCheck" disabled>
+          <label for="liveModeCheck">Enable live calling — once checked, pressing <b>Dial</b> places a
+            real call through Twilio to the number shown. Compliance checks in this UI are simulated
+            and enforce nothing once this is on; that has to live in your backend's <code>/voice</code>
+            handler.</label>
+        </div>
+      </div>
 
       <div class="row" style="margin-top:12px">
         <button class="btn primary" id="startBtn">Start session</button>
@@ -248,6 +280,12 @@
   <b>simulated in the browser</b>; the real ones must be made server-side and fail closed.
   Uploaded lead lists stay in this browser tab only — nothing is dialed or transmitted.
 </footer>
+<!-- Twilio Voice JS SDK. As of 2.0 Twilio no longer hosts this on their own CDN (npm or a
+     self-hosted copy from GitHub Releases is their recommended path) -- this is jsDelivr's mirror
+     of the published npm package, which is fine for getting this running but isn't an
+     official Twilio-hosted URL. For anything beyond testing, download dist/twilio.min.js from
+     https://github.com/twilio/twilio-voice.js/releases and self-host it instead. -->
+<script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.15.0/dist/twilio.min.js"></script>
 <script>
 "use strict";
 /* ------------------------------------------------------------------ *
@@ -290,15 +328,22 @@ const SAMPLE_LEADS = [
 let LEADS = SAMPLE_LEADS.map(L => ({...L}));
 
 /* ---------------- CSV lead upload ---------------- *
- * Expected header row (case-insensitive, order doesn't matter):
- *   name, phone, age, state, tz, city, product, source, last_touch, attempts, consent,
- *   block_code, block_msg
- * Only name and phone are required. Anything else missing gets a sane placeholder so the
- * call stage never renders "undefined". block_code / block_msg are optional — leave both
- * blank for an eligible lead, or set both to mark it compliance-blocked (e.g. INTERNAL_DNC).
- * A block_code other than CALLING_WINDOW / INTERNAL_DNC / ATTEMPT_LIMIT is treated as a
- * generic block so the outcome panel still shows a safe "confirm, don't call" affordance.
+ * Header matching is alias-based, NOT an exact "name"/"phone" requirement. Real exports (this
+ * agency's own quote-request form, a CRM export, a vendor aged list) all name these two columns
+ * differently, and making the agent rename columns by hand before every upload is exactly the kind
+ * of friction this tool exists to remove. The importer tries an exact "name" / "phone" header
+ * first, then falls through NAME_ALIASES / PHONE_ALIASES in order.
+ *
+ * Everything else is optional and degrades gracefully to a placeholder ("—") or a reasonable
+ * default. A few columns get extra help because they showed up in a real export from this agency's
+ * own quote form (quotes_rows.csv): `people` (a JSON array of {age, sex, smoker, monthlyPremium}
+ * per applicant), `submitted_at` / `created_at`, `consent_to_contact`, `zip`, `family_best_time`.
  */
+const NAME_ALIASES = ['name','full_name','fullname','contact_name','lead_name','client_name',
+                       'insured_name','family_name','first_name'];
+const PHONE_ALIASES = ['phone','phone_number','mobile','cell','telephone','contact_phone',
+                        'family_phone','consent_phone_number'];
+
 const CSV_TEMPLATE =
 `name,phone,age,state,tz,city,product,source,last_touch,attempts,consent,block_code,block_msg
 Jane Example,+1 555-0100,68,FL,ET,Tampa,Final Expense,Facebook lead form,3 days ago,0,"Written, 2026-07-20",,
@@ -330,14 +375,32 @@ function parseCSV(text){
 
 function normalizeHeader(h){ return h.trim().toLowerCase().replace(/[\s-]+/g,'_'); }
 
+function findColumn(headers, aliases){
+  for(const key of aliases){ const i = headers.indexOf(key); if(i !== -1) return i; }
+  return -1;
+}
+
 function rowsToLeads(rows){
   if(rows.length < 2) throw new Error('CSV needs a header row plus at least one lead row.');
   const headers = rows[0].map(normalizeHeader);
-  const nameIdx = headers.indexOf('name');
-  const phoneIdx = headers.indexOf('phone');
+  const nameIdx = findColumn(headers, NAME_ALIASES);
+  const phoneIdx = findColumn(headers, PHONE_ALIASES);
   if(nameIdx === -1 || phoneIdx === -1)
-    throw new Error('CSV must have "name" and "phone" columns.');
+    throw new Error(`CSV must have a name-like column (tried: ${NAME_ALIASES.join(', ')}) and a `+
+                     `phone-like column (tried: ${PHONE_ALIASES.join(', ')}).`);
   const get = (r, key) => { const i = headers.indexOf(key); return i === -1 ? '' : (r[i] || '').trim(); };
+  // Best-effort age from a JSON "people" column (this agency's quote-form export shape: an array of
+  // {age, sex, smoker, monthlyPremium} per applicant on the quote). Falls back to null on anything
+  // that isn't valid JSON — never throws, since this is a bonus enrichment, not a required field.
+  const ageFromPeople = (r) => {
+    const raw = get(r, 'people');
+    if(!raw) return null;
+    try{
+      const arr = JSON.parse(raw);
+      if(Array.isArray(arr) && arr.length && Number.isFinite(arr[0].age)) return arr[0].age;
+    } catch(e){ /* not JSON — ignore */ }
+    return null;
+  };
   const leads = [];
   const skipped = [];
   rows.slice(1).forEach((r, i) => {
@@ -347,18 +410,26 @@ function rowsToLeads(rows){
     const blockCode = get(r, 'block_code');
     const blockMsg = get(r, 'block_msg');
     const attemptsRaw = get(r, 'attempts');
+    const ageRaw = get(r, 'age');
+    const age = Number.isFinite(parseInt(ageRaw,10)) ? parseInt(ageRaw,10) : ageFromPeople(r);
+    const zip = get(r,'zip');
+    const consentToContact = get(r,'consent_to_contact');
+    const bestTime = get(r,'family_best_time') || get(r,'best_time');
+    const isQuoteExport = !!(get(r,'submitted_at') || get(r,'total_monthly_premium') || get(r,'people'));
     const lead = {
       id: get(r,'id') || `CSV-${i+1}`,
       name, phone,
-      age: (() => { const a = parseInt(get(r,'age'), 10); return Number.isFinite(a) ? a : null; })(),
+      age,
       state: get(r,'state') || '—',
       tz: get(r,'tz') || '—',
-      city: get(r,'city') || '—',
-      product: get(r,'product') || '—',
-      source: get(r,'source') || 'CSV upload',
-      lastTouch: get(r,'last_touch') || 'Unknown',
+      city: get(r,'city') || (zip ? `ZIP ${zip}` : '—'),
+      product: get(r,'product') || (isQuoteExport ? 'Health insurance quote' : '—'),
+      source: get(r,'source') || (isQuoteExport ? 'Online quote form' : 'CSV upload'),
+      lastTouch: get(r,'last_touch') || get(r,'submitted_at') || get(r,'created_at') || 'Unknown',
       attempts: Number.isFinite(parseInt(attemptsRaw,10)) ? parseInt(attemptsRaw,10) : 0,
-      consent: get(r,'consent') || 'Not recorded',
+      consent: get(r,'consent') ||
+        (consentToContact ? `${consentToContact} — consent to contact on file` +
+                             (bestTime ? ` · best time to call: ${bestTime}` : '') : 'Not recorded'),
     };
     if(blockCode){
       lead.block = { code: blockCode, msg: blockMsg || 'Blocked by uploaded lead data.' };
@@ -384,7 +455,7 @@ function uploadLeads(file){
     try{
       const rows = parseCSV(String(reader.result));
       const { leads, skipped } = rowsToLeads(rows);
-      if(!leads.length) throw new Error('No usable rows found (need at least name + phone).');
+      if(!leads.length) throw new Error('No usable rows found (need at least a name and a phone number).');
       // Uploading a new list is a hard reset of the session, same as Stop: any in-flight call
       // or partially-worked queue against the OLD list is meaningless against the new one.
       if(S.running) hardStopForReload();
@@ -474,7 +545,13 @@ let S = {
   // (P-2)
   done:{},
   deferred:{},                  // id -> {reason, at} -- requeued, NOT retired (P-6)
-  sessionStartedAt:null
+  sessionStartedAt:null,
+  // Twilio Voice JS SDK wiring. `device` is the registered Twilio.Device once Connect succeeds;
+  // `call` is the in-progress Twilio.Call, if any. `liveEnabled` is the SECOND, independent gate --
+  // being connected to a backend is not enough by itself to place real calls, see the checkbox
+  // handler below. Everything defaults to off/null, so simulated dialing is what happens unless
+  // both gates have been deliberately opened.
+  twilio: { device:null, call:null, liveEnabled:false, backendUrl:'' }
 };
 // Blocked leads are counted from the RECORD SET, never incremented on load. `loadLead` used to do
 // `S.stats.blocked++` unconditionally, so stopping and restarting re-counted the same lead and the
@@ -630,7 +707,11 @@ function renderStage(){
   $('#skipBtn').disabled = S.phase==='dialing' || S.phase==='connected';
   dial.onclick = startDial;
   hang.onclick = hangUp;
-  $('#muteBtn').onclick = ()=>{ S.muted=!S.muted; log(S.muted?'Muted':'Unmuted'); renderStage(); };
+  $('#muteBtn').onclick = ()=>{
+    S.muted=!S.muted;
+    if(S.twilio.call){ try{ S.twilio.call.mute(S.muted); }catch(e){} }
+    log(S.muted?'Muted':'Unmuted'); renderStage();
+  };
   $('#padBtn').onclick  = ()=>{ S.keypad=!S.keypad; renderStage(); };
   $('#holdBtn').onclick = ()=> log('Hold — provider-dependent, stubbed in this prototype');
   $('#skipBtn').onclick = ()=> skipLead();
@@ -725,9 +806,43 @@ function loadLead(i){
 function startDial(){
   if(S.phase!=='ready') return;
   S.phase='dialing'; S.stats.dialed++; S.attempted=true;
-  log(`Dialing ${LEADS[S.idx].phone}…`);
+  const L = LEADS[S.idx];
+
+  // LIVE PATH. Both gates (a registered Twilio.Device AND the explicit "Enable live calling"
+  // checkbox) have to be open for this branch to run at all -- see twilioConnect() and the
+  // liveModeCheck handler below. Anything short of that falls through to the simulated branch.
+  if(S.twilio.liveEnabled && S.twilio.device){
+    log(`⚠ LIVE — dialing ${L.phone} for real via Twilio…`,'bad');
+    render();
+    S.twilio.device.connect({ params: { To: L.phone } }).then(call => {
+      if(S.idx < 0 || LEADS[S.idx] !== L) { call.disconnect(); return; } // lead changed underneath us
+      S.twilio.call = call;
+      call.on('accept', () => {
+        S.phase='connected'; S.stats.contact++;
+        startTick();
+        log('Twilio call accepted — media connected','ok');
+        render();
+      });
+      const ended = (reason) => () => {
+        if(S.twilio.call !== call) return; // stale handler from a previous call
+        twilioCallEnded(reason);
+      };
+      call.on('disconnect', ended('disconnect'));
+      call.on('cancel', ended('cancel'));
+      call.on('reject', ended('reject'));
+      call.on('error', (err) => { log(`Twilio call error: ${err.message}`,'bad'); ended('error')(); });
+    }).catch(err => {
+      log(`Twilio connect failed: ${err.message}`,'bad');
+      S.phase='wrapup'; S.dispo='no-answer';
+      render();
+    });
+    return;
+  }
+
+  // SIMULATED PATH (default). Simulated ring, then a simulated answer-or-not. Nothing leaves the
+  // browser -- this is unchanged from the original prototype behavior.
+  log(`Dialing ${L.phone}…`);
   render();
-  // Simulated ring, then a simulated answer-or-not. Nothing leaves the browser.
   setTimeout(()=>{
     if(S.phase!=='dialing') return;
     if(Math.random() < 0.62){
@@ -741,8 +856,25 @@ function startDial(){
     render();
   }, 1600 + Math.random()*1400);
 }
+// Fires from the Twilio Call's 'disconnect' / 'cancel' / 'reject' / 'error' events -- i.e. whenever
+// a LIVE call ends, whether the agent hung up, the consumer hung up, or it never connected at all.
+function twilioCallEnded(reason){
+  const wasConnected = S.phase==='connected';
+  stopTick();
+  if(wasConnected) S.talkTotal += S.elapsed;
+  S.twilio.call = null;
+  log(`Twilio call ended (${reason}) after ${mmss(S.elapsed)}`, wasConnected ? undefined : 'bad');
+  S.phase='wrapup';
+  // A call that ended without ever being accepted is a non-contact outcome, same bucket the
+  // simulated path uses. The real reason is still visible in the log line above.
+  if(!wasConnected && !S.dispo) S.dispo = 'no-answer';
+  render();
+}
 function hangUp(){
   if(!(S.phase==='dialing'||S.phase==='connected')) return;
+  // LIVE call: disconnect the real call and let its 'disconnect' event finish the transition
+  // (twilioCallEnded), rather than duplicating that logic here.
+  if(S.twilio.call){ S.twilio.call.disconnect(); return; }
   stopTick();
   S.talkTotal += S.elapsed;
   log(`Call ended after ${mmss(S.elapsed)}`);
@@ -910,6 +1042,10 @@ function recordInterruption(kind){
   const L = LEADS[S.idx];
   if(!L) return;
   if(S.phase==='connected') S.talkTotal += S.elapsed;
+  // If this interrupts a LIVE Twilio call, actually hang it up. Recording the interruption in app
+  // state is not the same as ending the real phone call -- without this, Stop/Kill would update the
+  // UI while leaving an actual call connected on the PSTN side.
+  if(S.twilio.call){ try{ S.twilio.call.disconnect(); }catch(e){} S.twilio.call = null; }
   S.interrupted = kind;
   S.done[L.id] = {
     dispo:'not-attempted', label:`Interrupted by ${kind}`,
@@ -934,7 +1070,14 @@ $('#killBtn').onclick = ()=>{
   $('#killDot').className = 'dot' + (S.killed ? ' err' : '');
   $('#killTxt').textContent = S.killed ? 'KILL SWITCH ENGAGED' : 'Kill switch: armed';
   if(S.killed){
-    recordInterruption('kill-switch');
+    recordInterruption('kill-switch'); // also disconnects any live Twilio call, see above
+    // The kill switch must also close the live-calling gate itself, not just the call in progress --
+    // otherwise re-arming and starting a new session would immediately be live again with no
+    // fresh confirmation. Re-enabling requires ticking the checkbox again.
+    if(S.twilio.device){ try{ S.twilio.device.disconnectAll(); }catch(e){} }
+    S.twilio.liveEnabled = false;
+    const liveCb = $('#liveModeCheck'); if(liveCb) liveCb.checked = false;
+    updateModeBanner();
     stopTick(); S.running=false; S.phase='idle'; S.idx=-1;
     log('KILL SWITCH ENGAGED — all dialing halted','bad');
     syncButtons(); render();
@@ -949,6 +1092,108 @@ $('#cbTime').onchange = renderDispo;
 $('#cbTime').oninput = renderDispo;
 $('#ackBox').onchange = renderDispo;
 $('#ackReason').oninput = renderDispo;
+/* ---------------- Twilio live calling ---------------- *
+ * Two independent gates, both required before startDial() will place a real call:
+ *   1. S.twilio.device exists and is registered (twilioConnect() succeeded).
+ *   2. S.twilio.liveEnabled is true (the agent explicitly ticked the checkbox AND confirmed the
+ *      warning dialog). Neither one alone is enough -- a backend URL sitting in the input field,
+ *      or a stale registered Device from an earlier session, must not be enough to go live.
+ * Everything here is additive: with no backend configured, nothing in this section ever runs and
+ * the dialer behaves exactly as it did before Twilio was wired in.
+ */
+function setTwilioStatus(msg, kind){
+  const el = $('#twilioStatus');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = kind==='bad' ? 'var(--bad)' : kind==='ok' ? 'var(--ok)' : 'var(--ink-faint)';
+}
+function updateModeBanner(){
+  const b = $('#modeBanner');
+  if(!b) return;
+  if(S.twilio.liveEnabled){
+    b.classList.add('live-mode');
+    b.innerHTML = '<b>LIVE — REAL CALLS WILL BE PLACED.</b> Live calling is enabled through your ' +
+      'Twilio backend. Every press of Dial places an actual phone call to the number shown on screen.';
+  } else {
+    b.classList.remove('live-mode');
+    b.innerHTML = '<b>PROTOTYPE — NOT CONNECTED TO ANYTHING.</b> No telephony provider, no ' +
+      'GoHighLevel, no network calls. Dialing is simulated in the browser and never reaches any ' +
+      'phone, real or fictional. This writes nothing anywhere outside this tab.';
+  }
+}
+async function twilioConnect(){
+  if(typeof Twilio === 'undefined' || !Twilio.Device){
+    setTwilioStatus('Twilio Voice SDK failed to load — check your network/ad-blocker.','bad');
+    return;
+  }
+  const url = $('#twilioBackendUrl').value.trim().replace(/\/+$/,'');
+  if(!url){ setTwilioStatus('Enter your backend URL first.','bad'); return; }
+  setTwilioStatus('Requesting access token…');
+  $('#twilioConnectBtn').disabled = true;
+  try{
+    const resp = await fetch(`${url}/token?identity=agent`);
+    if(!resp.ok) throw new Error(`Backend returned HTTP ${resp.status}`);
+    const data = await resp.json();
+    if(!data.token) throw new Error('Backend response had no token field');
+
+    if(S.twilio.device){ try{ S.twilio.device.destroy(); }catch(e){} }
+    const device = new Twilio.Device(data.token);
+    S.twilio.device = device;
+    S.twilio.backendUrl = url;
+
+    device.on('registered', () => {
+      setTwilioStatus('Connected — ready to dial with Twilio.', 'ok');
+      log('Twilio device registered','ok');
+      $('#liveModeCheck').disabled = false;
+    });
+    device.on('error', (err) => {
+      setTwilioStatus(`Twilio device error: ${err.message}`, 'bad');
+      log(`Twilio device error: ${err.message}`, 'bad');
+    });
+    device.on('unregistered', () => {
+      setTwilioStatus('Disconnected from Twilio — dialing is simulated.', 'bad');
+      S.twilio.liveEnabled = false;
+      const cb = $('#liveModeCheck'); if(cb){ cb.checked = false; cb.disabled = true; }
+      updateModeBanner();
+    });
+    // Access tokens expire (default 1hr, see server.js). Refresh transparently rather than
+    // silently falling back to simulated mid-session with no explanation.
+    device.on('tokenWillExpire', async () => {
+      try{
+        const r = await fetch(`${url}/token?identity=agent`);
+        const d = await r.json();
+        device.updateToken(d.token);
+        log('Twilio access token refreshed');
+      } catch(e){
+        log('Failed to refresh Twilio token — reconnect manually before it expires.','bad');
+      }
+    });
+
+    setTwilioStatus('Registering (check for a microphone permission prompt)…');
+    await device.register();
+  } catch(err){
+    setTwilioStatus(`Connection failed: ${err.message}`, 'bad');
+    log(`Twilio connect failed: ${err.message}`, 'bad');
+  } finally {
+    $('#twilioConnectBtn').disabled = false;
+  }
+}
+$('#twilioConnectBtn').onclick = twilioConnect;
+$('#liveModeCheck').onchange = (e) => {
+  if(e.target.checked){
+    const ok = window.confirm(
+      'Live calling will place REAL calls through Twilio to whatever numbers are in your current ' +
+      'lead list. The compliance UI in this prototype (blocked leads, consent, calling windows) is ' +
+      'simulated in the browser and enforces nothing once real calls are being placed -- that logic ' +
+      'has to live in your backend\'s /voice handler. Continue?'
+    );
+    if(!ok){ e.target.checked = false; return; }
+  }
+  S.twilio.liveEnabled = e.target.checked;
+  log(S.twilio.liveEnabled ? '⚠ Live calling ENABLED — Dial will place real calls' : 'Live calling disabled — back to simulated dialing',
+      S.twilio.liveEnabled ? 'bad' : undefined);
+  updateModeBanner();
+};
 /* ---------------- CSV controls ---------------- */
 $('#csvBtn').onclick = ()=> $('#csvInput').click();
 $('#csvInput').onchange = (e)=>{
@@ -1007,7 +1252,7 @@ document.addEventListener('keydown', e=>{
 /* ---------------- boot ---------------- */
 syncButtons();
 render();
-log('Prototype loaded. Nothing here dials a real number. Upload a CSV to bring in your own leads.');
+log('Prototype loaded. Nothing here dials a real number. Upload a CSV to bring in your own leads, or connect a Twilio backend below to enable live calling.');
 </script>
 </body>
 </html>
