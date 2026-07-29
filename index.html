@@ -181,6 +181,7 @@
     </span>
     Insurance Dialer <span>/ power dialer session</span>
   </div>
+  <span class="pill ok" id="agentBadge" style="display:none"></span>
   <button class="kill" id="killBtn" title="Global stop — halts the session immediately">
     <span class="dot" id="killDot"></span><span id="killTxt">Kill switch: armed</span>
   </button>
@@ -221,7 +222,9 @@
            fallback for anything that isn't both of those -- opening this file does not, by itself,
            ever place a real call. -->
       <div class="twilio-box">
-        <label class="fld" style="margin-top:0">Live calling (Twilio) — backend URL</label>
+        <label class="fld" style="margin-top:0">Agent name — identifies your calls to Twilio and on recordings</label>
+        <input type="text" id="agentName" placeholder="e.g. Jane Diaz" style="margin-bottom:8px">
+        <label class="fld">Live calling (Twilio) — backend URL</label>
         <input type="text" id="twilioBackendUrl" placeholder="https://your-backend.example.com">
         <div class="row">
           <button class="btn" id="twilioConnectBtn">Connect</button>
@@ -339,6 +342,16 @@
     </div>
     <h2 style="border-top:1px solid var(--line)">Session log</h2>
     <div class="log" id="log"></div>
+    <!-- RECORDINGS. Populated on demand (Refresh), not polled -- a recording isn't ready until
+         Twilio finishes processing it after the call ends, so there's nothing to gain from hammering
+         the endpoint continuously. Playback streams through the backend's audio proxy, which is the
+         only thing allowed to hold Twilio credentials (see server.js). -->
+    <h2 style="border-top:1px solid var(--line)">Recordings
+      <span class="count"><button class="btn" id="recordingsRefreshBtn" style="padding:3px 9px;font-size:10.5px">Refresh</button></span>
+    </h2>
+    <div class="log" id="recordingsList" style="max-height:160px">
+      <div style="padding:10px 14px;color:var(--ink-faint);font-size:11.5px">Connect to Twilio to see recordings.</div>
+    </div>
   </section>
 </main>
 <footer>
@@ -635,7 +648,10 @@ let S = {
   // being connected to a backend is not enough by itself to place real calls, see the checkbox
   // handler below. Everything defaults to off/null, so simulated dialing is what happens unless
   // both gates have been deliberately opened.
-  twilio: { device:null, call:null, liveEnabled:false, backendUrl:'' }
+  // `identity` is the sanitized agent name sent to Twilio (see sanitizeIdentity()) -- distinct
+  // agents each register their own Device under their own identity instead of everyone sharing the
+  // single hardcoded 'agent' string, so calls/recordings/sessions can be attributed correctly.
+  twilio: { device:null, call:null, liveEnabled:false, backendUrl:'', identity:'' }
 };
 // Leads ticked in the queue for the NEXT power dial (Set of lead ids). Cleared the moment a power
 // dial launches -- this is a staging selection, not part of the session record.
@@ -1094,7 +1110,8 @@ async function startPowerDialLive(leadIdxs){
   const numbers = leadIdxs.map(i => LEADS[i].phone);
   const url = S.twilio.backendUrl;
   const resp = await fetch(`${url}/power-dial/start`, {
-    method:'POST', headers:{'Content-Type':'application/json', ...NGROK_BYPASS}, body: JSON.stringify({numbers}),
+    method:'POST', headers:{'Content-Type':'application/json', ...NGROK_BYPASS},
+    body: JSON.stringify({numbers, agentIdentity: S.twilio.identity || null}),
   });
   const data = await parseJsonResponse(resp, 'Power dial failed to start');
   PD = {
@@ -1174,7 +1191,7 @@ function startManualDial(){
 
   // LIVE PATH -- same two gates (registered device + liveEnabled) as every other dial path here.
   if(S.twilio.liveEnabled && S.twilio.device){
-    S.twilio.device.connect({ params: { To: number } }).then(call => {
+    S.twilio.device.connect({ params: { To: number, LeadId: 'manual', LeadName: `Manual dial (${number})` } }).then(call => {
       if(!MD){ call.disconnect(); return; } // cancelled before it connected
       S.twilio.call = call;
       call.on('accept', () => {
@@ -1329,7 +1346,7 @@ function startDial(){
   if(S.twilio.liveEnabled && S.twilio.device){
     log(`⚠ LIVE — dialing ${L.phone} for real via Twilio…`,'bad');
     render();
-    S.twilio.device.connect({ params: { To: L.phone } }).then(call => {
+    S.twilio.device.connect({ params: { To: L.phone, LeadId: L.id, LeadName: L.name } }).then(call => {
       if(S.idx < 0 || LEADS[S.idx] !== L) { call.disconnect(); return; } // lead changed underneath us
       S.twilio.call = call;
       call.on('accept', () => {
@@ -1466,6 +1483,7 @@ function finish(dispo, skipped){
     complianceReason: (dispo==='compliance-retired') ? $('#ackReason').value.trim()
                      : (dispo==='dnc-confirmed' && L.block) ? L.block.msg : null,
     skipped: !!skipped,
+    agent: S.twilio.identity || null,
     at: new Date().toISOString()
   };
   S.done[L.id] = rec;
@@ -1577,7 +1595,7 @@ function recordInterruption(kind){
     note:($('#notes').value.trim() || null), callbackAt:null,
     attempted:true, talkSeconds:S.elapsed, interrupted:kind,
     blockCode:null, complianceAck:false, complianceReason:null,
-    skipped:false, at:new Date().toISOString()
+    skipped:false, agent: S.twilio.identity || null, at:new Date().toISOString()
   };
   log(`⚠ In-flight call to ${L.name} cut by ${kind} after ${mmss(S.elapsed)} — recorded as interrupted`,'bad');
 }
@@ -1670,6 +1688,23 @@ function updateModeBanner(){
       'phone, real or fictional. This writes nothing anywhere outside this tab.';
   }
 }
+// Turns a free-typed agent name into a safe Twilio JWT identity claim: letters/numbers/space/basic
+// punctuation only, capped length. Falls back to a generic identity rather than refusing to connect
+// outright on a blank or odd name -- multi-agent attribution is the point, not a hard gate.
+function sanitizeIdentity(name){
+  const cleaned = (name || '').trim().replace(/[^\w \-.']/g, '').slice(0, 60);
+  return cleaned || 'agent';
+}
+function updateAgentBadge(){
+  const badge = $('#agentBadge');
+  if(!badge) return;
+  if(S.twilio.device && S.twilio.identity){
+    badge.textContent = `👤 ${S.twilio.identity}`;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 async function twilioConnect(){
   if(typeof Twilio === 'undefined' || !Twilio.Device){
     setTwilioStatus('Twilio Voice SDK failed to load — check your network/ad-blocker.','bad');
@@ -1677,10 +1712,13 @@ async function twilioConnect(){
   }
   const url = $('#twilioBackendUrl').value.trim().replace(/\/+$/,'');
   if(!url){ setTwilioStatus('Enter your backend URL first.','bad'); return; }
+  const agentNameRaw = $('#agentName').value;
+  const identity = sanitizeIdentity(agentNameRaw);
+  localStorage.setItem('dialerAgentName', agentNameRaw.trim());
   setTwilioStatus('Requesting access token…');
   $('#twilioConnectBtn').disabled = true;
   try{
-    const resp = await fetch(`${url}/token?identity=agent`, { headers: NGROK_BYPASS });
+    const resp = await fetch(`${url}/token?identity=${encodeURIComponent(identity)}`, { headers: NGROK_BYPASS });
     if(!resp.ok) throw new Error(`Backend returned HTTP ${resp.status}`);
     const data = await resp.json();
     if(!data.token) throw new Error('Backend response had no token field');
@@ -1689,11 +1727,14 @@ async function twilioConnect(){
     const device = new Twilio.Device(data.token);
     S.twilio.device = device;
     S.twilio.backendUrl = url;
+    S.twilio.identity = identity;
 
     device.on('registered', () => {
       setTwilioStatus('Connected — ready to dial with Twilio.', 'ok');
-      log('Twilio device registered','ok');
+      log(`Twilio device registered as "${identity}"`,'ok');
       $('#liveModeCheck').disabled = false;
+      updateAgentBadge();
+      fetchRecordings();
     });
     device.on('error', (err) => {
       setTwilioStatus(`Twilio device error: ${err.message}`, 'bad');
@@ -1704,12 +1745,13 @@ async function twilioConnect(){
       S.twilio.liveEnabled = false;
       const cb = $('#liveModeCheck'); if(cb){ cb.checked = false; cb.disabled = true; }
       updateModeBanner();
+      updateAgentBadge();
     });
     // Access tokens expire (default 1hr, see server.js). Refresh transparently rather than
     // silently falling back to simulated mid-session with no explanation.
     device.on('tokenWillExpire', async () => {
       try{
-        const r = await fetch(`${url}/token?identity=agent`, { headers: NGROK_BYPASS });
+        const r = await fetch(`${url}/token?identity=${encodeURIComponent(identity)}`, { headers: NGROK_BYPASS });
         const d = await r.json();
         device.updateToken(d.token);
         log('Twilio access token refreshed');
@@ -1728,6 +1770,49 @@ async function twilioConnect(){
   }
 }
 $('#twilioConnectBtn').onclick = twilioConnect;
+// Prefill the agent name from last time -- a real convenience for a page an agent reopens every
+// shift, and low-risk here (this is a real deployed page the agent controls, not a shared/public
+// kiosk and not a Claude.ai artifact preview).
+{
+  const savedName = localStorage.getItem('dialerAgentName');
+  if(savedName) $('#agentName').value = savedName;
+}
+/* ---------------- Recordings ---------------- *
+ * Twilio records both the single-call dial (from answer) and the power-dial conference (from
+ * start) -- see server.js. Fetched on demand rather than polled: a recording isn't ready until
+ * Twilio finishes processing it after the call ends, so nothing is gained by hammering this.
+ */
+async function fetchRecordings(){
+  const listEl = $('#recordingsList');
+  if(!listEl) return;
+  if(!S.twilio.backendUrl){
+    listEl.innerHTML = `<div style="padding:10px 14px;color:var(--ink-faint);font-size:11.5px">Connect to Twilio to see recordings.</div>`;
+    return;
+  }
+  listEl.innerHTML = `<div style="padding:10px 14px;color:var(--ink-faint);font-size:11.5px">Loading…</div>`;
+  try{
+    const resp = await fetch(`${S.twilio.backendUrl}/recordings`, { headers: NGROK_BYPASS });
+    const data = await parseJsonResponse(resp, 'Could not load recordings');
+    if(!data.recordings.length){
+      listEl.innerHTML = `<div style="padding:10px 14px;color:var(--ink-faint);font-size:11.5px">No recordings yet this session.</div>`;
+      return;
+    }
+    listEl.innerHTML = data.recordings.map(r=>{
+      const who = r.leadName ? r.leadName : r.session ? `Power dial session ${r.session.slice(0,8)}…` : 'Unknown';
+      const when = new Date(r.createdAt).toLocaleString();
+      const dur = r.duration ? mmss(r.duration) : '—';
+      const audioUrl = `${S.twilio.backendUrl}/recordings/${encodeURIComponent(r.sid)}/audio`;
+      return `<div style="padding:9px 14px;border-bottom:1px solid #1e2531">
+        <div style="font-size:12px;font-weight:600">${who}</div>
+        <div style="font-size:11px;color:var(--ink-faint);margin:2px 0 6px">${when} · ${dur}</div>
+        <audio controls preload="none" style="width:100%;height:30px" src="${audioUrl}"></audio>
+      </div>`;
+    }).join('');
+  } catch(err){
+    listEl.innerHTML = `<div style="padding:10px 14px;color:var(--bad);font-size:11.5px">${err.message}</div>`;
+  }
+}
+$('#recordingsRefreshBtn').onclick = fetchRecordings;
 $('#liveModeCheck').onchange = (e) => {
   if(e.target.checked){
     const ok = window.confirm(
