@@ -1797,10 +1797,18 @@ function updateModeBanner(){
   }
 }
 // Turns a free-typed agent name into a safe Twilio JWT identity claim: letters/numbers/space/basic
-// punctuation only, capped length. Falls back to a generic identity rather than refusing to connect
-// outright on a blank or odd name -- multi-agent attribution is the point, not a hard gate.
+// punctuation only, capped length. Twilio's Client identity is used at the signaling layer (not just
+// as a label), and it does NOT tolerate spaces or most punctuation there -- sending one produces a
+// generic, hard-to-diagnose "ConnectionError (53000)" when the SDK tries to register, rather than a
+// clear validation error. So unlike a typical display-name sanitizer, this collapses whitespace to
+// underscores and strips everything except letters/digits/underscore/hyphen/dot. Falls back to a
+// generic identity rather than refusing to connect outright on a blank name -- multi-agent
+// attribution is the point, not a hard gate.
 function sanitizeIdentity(name){
-  const cleaned = (name || '').trim().replace(/[^\w \-.']/g, '').slice(0, 60);
+  const cleaned = (name || '').trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^\w\-.]/g, '')
+    .slice(0, 60);
   return cleaned || 'agent';
 }
 function updateAgentBadge(){
@@ -1872,8 +1880,13 @@ async function twilioConnect(){
     setTwilioStatus('Registering (check for a microphone permission prompt)…');
     await device.register();
   } catch(err){
-    setTwilioStatus(`Connection failed: ${err.message}`, 'bad');
-    log(`Twilio connect failed: ${err.message}`, 'bad');
+    // device.register() can reject with something other than a proper Error (sometimes undefined)
+    // when the underlying problem is a signaling/connection failure rather than a normal rejection --
+    // don't let reading .message off that crash the handler and swallow the real error.
+    const msg = (err && err.message) ? err.message
+      : (typeof err === 'string' ? err : 'Connection failed (no further detail from the SDK — check the browser console and your network/firewall).');
+    setTwilioStatus(`Connection failed: ${msg}`, 'bad');
+    log(`Twilio connect failed: ${msg}`, 'bad');
   } finally {
     $('#twilioConnectBtn').disabled = false;
   }
