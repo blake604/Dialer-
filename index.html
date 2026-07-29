@@ -215,6 +215,18 @@
       <p style="margin:8px 0 0;font-size:11.5px;color:var(--ink-faint)" id="csvStatus">
         Using 8 built-in sample leads. Upload a CSV to replace them.
       </p>
+      <!-- LEAD ARCHIVE. Every CSV upload is saved server-side under the connected agent's name (see
+           server.js's /leads/archive routes) so it survives a refresh -- requires being connected
+           (Agent name + Connect) first; uploading while disconnected still works, it's just not
+           archived, and the log says so either way. -->
+      <div class="row" style="margin-top:8px;align-items:center">
+        <select id="archiveSelect" style="flex:1;min-width:140px" disabled>
+          <option value="">My archive — connect to Twilio first</option>
+        </select>
+        <button class="btn" id="archiveLoadBtn" disabled>Load</button>
+        <button class="btn" id="archiveDeleteBtn" disabled title="Delete this archived upload">🗑</button>
+        <button class="btn" id="archiveRefreshBtn" disabled title="Refresh archive list">↻</button>
+      </div>
 
       <!-- LIVE CALLING. Off by default, and stays off until two separate, deliberate actions
            happen: (1) Connect succeeds against a real backend, and (2) the agent explicitly ticks
@@ -546,6 +558,18 @@ function rowsToLeads(rows){
   return { leads, skipped };
 }
 
+// Shared by a fresh CSV upload AND reloading a saved archive entry -- the same reset of session
+// state either way, so a lead-list swap behaves identically no matter where the list came from.
+// (Folding this out also fixed a latent bug: the old inline reset was missing `abandoned:0`, which
+// would have left S.stats.abandoned undefined -- and therefore NaN in the header stat -- after any
+// CSV upload made following a power dial.)
+function replaceLeadList(leads, logMessage){
+  if(S.running) hardStopForReload();
+  LEADS = leads;
+  S.done = {}; S.deferred = {}; S.stats = {dialed:0, contact:0, appt:0, abandoned:0}; S.talkTotal = 0;
+  log(logMessage, 'ok');
+  render();
+}
 function uploadLeads(file){
   const reader = new FileReader();
   reader.onload = () => {
@@ -555,15 +579,12 @@ function uploadLeads(file){
       if(!leads.length) throw new Error('No usable rows found (need at least a name and a phone number).');
       // Uploading a new list is a hard reset of the session, same as Stop: any in-flight call
       // or partially-worked queue against the OLD list is meaningless against the new one.
-      if(S.running) hardStopForReload();
-      LEADS = leads;
-      S.done = {}; S.deferred = {}; S.stats = {dialed:0, contact:0, appt:0}; S.talkTotal = 0;
+      replaceLeadList(leads, `📄 Uploaded ${file.name} — ${leads.length} lead(s) loaded, replacing the previous list`);
       $('#csvStatus').textContent =
         `Loaded ${leads.length} lead${leads.length===1?'':'s'} from ${file.name}` +
         (skipped.length ? ` — skipped ${skipped.length} row(s) missing name/phone (line ${skipped.join(', ')}).` : '.');
-      log(`📄 Uploaded ${file.name} — ${leads.length} lead(s) loaded, replacing the previous list`,'ok');
       if(skipped.length) log(`⚠ Skipped ${skipped.length} row(s) missing name or phone`,'bad');
-      render();
+      archiveCurrentUpload(leads, file.name);
     } catch(err){
       $('#csvStatus').textContent = `Upload failed: ${err.message}`;
       log(`Upload failed: ${err.message}`,'bad');
@@ -574,6 +595,93 @@ function uploadLeads(file){
     log('CSV upload failed: file could not be read','bad');
   };
   reader.readAsText(file);
+}
+// Saves this upload to the connected agent's server-side archive (see server.js's /leads/archive).
+// Best-effort and non-blocking -- an upload with no backend connected still works locally, it's
+// just not archived, and that distinction is logged either way rather than failing silently.
+async function archiveCurrentUpload(leads, filename){
+  if(!S.twilio.backendUrl){
+    log('Not connected to a backend — this upload was not archived (available in this tab only).');
+    return;
+  }
+  try{
+    const resp = await fetch(`${S.twilio.backendUrl}/leads/archive`, {
+      method:'POST', headers:{'Content-Type':'application/json', ...NGROK_BYPASS},
+      body: JSON.stringify({ agentIdentity: S.twilio.identity || 'unknown-agent', filename, leads }),
+    });
+    const data = await parseJsonResponse(resp, 'Could not save this upload to your archive');
+    log(`💾 Archived "${filename}" (${data.leadCount} leads) to ${S.twilio.identity || 'unknown-agent'}'s archive`,'ok');
+    fetchArchiveList();
+  } catch(err){
+    log(`Archive save failed: ${err.message}`,'bad');
+  }
+}
+async function fetchArchiveList(){
+  const sel = $('#archiveSelect'), loadBtn = $('#archiveLoadBtn'), refreshBtn = $('#archiveRefreshBtn'), delBtn = $('#archiveDeleteBtn');
+  if(!sel) return;
+  if(!S.twilio.backendUrl || !S.twilio.identity){
+    sel.innerHTML = `<option value="">My archive — connect to Twilio first</option>`;
+    sel.disabled = true; loadBtn.disabled = true; if(refreshBtn) refreshBtn.disabled = true; if(delBtn) delBtn.disabled = true;
+    return;
+  }
+  sel.disabled = false; if(refreshBtn) refreshBtn.disabled = false;
+  try{
+    const resp = await fetch(`${S.twilio.backendUrl}/leads/archive?agentIdentity=${encodeURIComponent(S.twilio.identity)}`, { headers: NGROK_BYPASS });
+    const data = await parseJsonResponse(resp, 'Could not load your archive');
+    if(!data.archives.length){
+      sel.innerHTML = `<option value="">No archived uploads yet</option>`;
+      loadBtn.disabled = true; if(delBtn) delBtn.disabled = true;
+      return;
+    }
+    sel.innerHTML = data.archives.map(a=>{
+      const when = new Date(a.uploadedAt).toLocaleString();
+      return `<option value="${a.id}">${a.filename} — ${a.leadCount} leads — ${when}</option>`;
+    }).join('');
+    loadBtn.disabled = false; if(delBtn) delBtn.disabled = false;
+  } catch(err){
+    sel.innerHTML = `<option value="">Failed to load archive</option>`;
+    log(`Archive list failed: ${err.message}`,'bad');
+  }
+}
+async function loadArchiveEntry(){
+  const sel = $('#archiveSelect');
+  const id = sel && sel.value;
+  if(!id || !S.twilio.backendUrl || !S.twilio.identity) return;
+  try{
+    const resp = await fetch(
+      `${S.twilio.backendUrl}/leads/archive/${encodeURIComponent(id)}?agentIdentity=${encodeURIComponent(S.twilio.identity)}`,
+      { headers: NGROK_BYPASS }
+    );
+    const entry = await parseJsonResponse(resp, 'Could not load this archived upload');
+    replaceLeadList(entry.leads, `📂 Loaded ${entry.leads.length} lead(s) from archive: ${entry.filename}`);
+    $('#csvStatus').textContent =
+      `Loaded ${entry.leads.length} lead(s) from your archive (${entry.filename}, saved ${new Date(entry.uploadedAt).toLocaleString()}).`;
+  } catch(err){
+    log(`Failed to load archived upload: ${err.message}`,'bad');
+  }
+}
+// Deletes one archived upload from the connected agent's server-side archive. This only removes it
+// from the "My archive" dropdown for future reloads -- it does not touch whatever lead list is
+// currently loaded into the queue, so deleting an entry is safe to do mid-session.
+async function deleteArchiveEntry(){
+  const sel = $('#archiveSelect');
+  const id = sel && sel.value;
+  if(!id || !S.twilio.backendUrl || !S.twilio.identity) return;
+  const label = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : 'this upload';
+  if(!confirm(`Delete "${label}" from your archive? This can't be undone.`)) return;
+  try{
+    const resp = await fetch(
+      `${S.twilio.backendUrl}/leads/archive/${encodeURIComponent(id)}?agentIdentity=${encodeURIComponent(S.twilio.identity)}`,
+      { method:'DELETE', headers: NGROK_BYPASS }
+    );
+    if(!resp.ok){
+      await parseJsonResponse(resp, 'Could not delete this archived upload');
+    }
+    log(`🗑 Deleted "${label}" from ${S.twilio.identity}'s archive`,'ok');
+    fetchArchiveList();
+  } catch(err){
+    log(`Archive delete failed: ${err.message}`,'bad');
+  }
 }
 
 function hardStopForReload(){
@@ -1735,6 +1843,7 @@ async function twilioConnect(){
       $('#liveModeCheck').disabled = false;
       updateAgentBadge();
       fetchRecordings();
+      fetchArchiveList();
     });
     device.on('error', (err) => {
       setTwilioStatus(`Twilio device error: ${err.message}`, 'bad');
@@ -1813,6 +1922,9 @@ async function fetchRecordings(){
   }
 }
 $('#recordingsRefreshBtn').onclick = fetchRecordings;
+$('#archiveLoadBtn').onclick = loadArchiveEntry;
+$('#archiveDeleteBtn').onclick = deleteArchiveEntry;
+$('#archiveRefreshBtn').onclick = fetchArchiveList;
 $('#liveModeCheck').onchange = (e) => {
   if(e.target.checked){
     const ok = window.confirm(
